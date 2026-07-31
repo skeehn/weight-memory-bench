@@ -44,8 +44,54 @@ class Model:
                 out[path.stem] = {"error": "unreadable result file"}
         return out
 
+    def _reader(self, size: str):
+        """Cache one reader per size.
+
+        Reloading a model per request would dominate a 400-instance run completely -- the
+        weights take longer to load than the generation takes to run.
+        """
+        if not hasattr(self, "_readers"):
+            self._readers = {}
+        if size not in self._readers:
+            from harness.reader import Reader
+            from harness.tokens import READER_LADDER
+
+            self._readers[size] = Reader(model=READER_LADDER.get(size, size))
+            self._readers[size].model  # force load now, not mid-batch
+        return self._readers[size]
+
     def predict(self, request: dict) -> dict:
         action = request.get("action", "run")
+
+        if action == "generate":
+            # Batched inference for the accuracy run. Context selection happens on the
+            # client -- it is pure text manipulation and costs nothing -- so the 278MB
+            # corpus never has to be shipped here. Only the selected context travels.
+            size = request.get("size", "1B")
+            items = request.get("items") or []
+            max_new = int(request.get("max_new_tokens", 32))
+            reader = self._reader(size)
+
+            out = []
+            for item in items:
+                try:
+                    gen = reader.generate(
+                        item.get("context", ""),
+                        item.get("question", ""),
+                        max_new_tokens=max_new,
+                    )
+                    out.append(
+                        {
+                            "id": item.get("id"),
+                            "text": gen.text,
+                            "prompt_tokens": gen.prompt_tokens,
+                            "generated_tokens": gen.generated_tokens,
+                        }
+                    )
+                except Exception as exc:
+                    # One bad instance must not discard the rest of an expensive batch.
+                    out.append({"id": item.get("id"), "error": f"{type(exc).__name__}: {exc}"})
+            return {"size": size, "count": len(out), "results": out}
 
         if action == "fetch":
             return {"action": "fetch", "results": self._saved()}

@@ -14,8 +14,15 @@ set -uo pipefail
 
 MODEL_ID="${MODEL_ID:-qzkme4kq}"
 KEY="$(grep -m1 '^api_key' ~/.trussrc | sed 's/.*= *//')"
-BASE="https://model-${MODEL_ID}.api.baseten.co/environments/production/predict"
 API="https://api.baseten.co/v1/models/${MODEL_ID}"
+
+# Target the deployment by ID, not by environment. `truss push` creates a NEW deployment
+# that is NOT promoted to production, so /environments/production/predict routes to the
+# previous one -- which here still carried the code that overwrote results across learning
+# rates. Addressing the deployment explicitly makes it impossible to silently measure the
+# wrong build.
+DEPLOYMENT_ID="${DEPLOYMENT_ID:?set DEPLOYMENT_ID to the deployment you intend to call}"
+BASE="https://model-${MODEL_ID}.api.baseten.co/deployment/${DEPLOYMENT_ID}/predict"
 OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/runs/lr_sweep"
 mkdir -p "$OUT_DIR"
 
@@ -25,15 +32,17 @@ LRS=(5e-4 1e-3 2e-3 5e-3)
 
 deactivate_deployment() {
     echo
-    echo "=== deactivating deployment (trap) ==="
-    DEP=$(curl -s -H "Authorization: Api-Key $KEY" "${API}/deployments" \
-        | python3 -c "import json,sys; print(json.load(sys.stdin)['deployments'][0]['id'])" 2>/dev/null)
-    if [ -n "${DEP:-}" ]; then
-        curl -s -X POST -H "Authorization: Api-Key $KEY" \
-            "${API}/deployments/${DEP}/deactivate" -o /dev/null -w "  deactivate -> HTTP %{http_code}\n"
-    else
-        echo "  COULD NOT RESOLVE DEPLOYMENT -- DEACTIVATE MANUALLY at app.baseten.co"
-    fi
+    echo "=== deactivating ALL deployments (trap) ==="
+    # Every deployment, not just the one being driven. A stale deployment left warm bills
+    # exactly the same as the current one, and there are now two on this model.
+    curl -s -H "Authorization: Api-Key $KEY" "${API}/deployments" \
+        | python3 -c "import json,sys; [print(d['id']) for d in json.load(sys.stdin)['deployments']]" 2>/dev/null \
+        | while read -r DEP; do
+            [ -z "$DEP" ] && continue
+            curl -s -X POST -H "Authorization: Api-Key $KEY" \
+                "${API}/deployments/${DEP}/deactivate" -o /dev/null \
+                -w "  ${DEP} deactivate -> HTTP %{http_code}\n"
+        done
 }
 trap deactivate_deployment EXIT INT TERM
 
