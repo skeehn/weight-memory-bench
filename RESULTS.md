@@ -187,6 +187,59 @@ these tables should be read as real.
 
 ---
 
+## 2.5 The forgetting curve: what online updating destroys
+
+100 online updates applied as **one continuous stream**, not as independent fine-tunes.
+That distinction is the point: *LoRA Learns Less and Forgets Less* measures forgetting after
+a single fine-tune, and a memory system updates forever. Llama-3.2-1B, rank 16, lr 2e-3,
+seed 0, measured at six checkpoints.
+
+| Updates | Retention | Held-out perplexity | vs baseline |
+|---|---|---|---|
+| 0 | 0.000 | 30.58 | 1.00x |
+| 5 | 0.000 | 37.79 | 1.24x |
+| 10 | 0.000 | 36.22 | 1.18x |
+| 25 | 0.000 | 73.75 | 2.41x |
+| 50 | **0.375** | 121.29 | 3.97x |
+| 100 | 0.000 | **1126.25** | **36.83x** |
+
+**The model is destroyed and remembers nothing.** Held-out perplexity — measured on prose
+sharing no vocabulary with the injected episodes — rises **36.8x**, and retention at that
+point is zero. The damage is not a side effect of successful memorization; there is no
+successful memorization to trade against.
+
+**There is no usable operating window.** Peak retention is 0.375 at 50 updates, and it
+already costs 4x perplexity. Retention never exceeds a third even at its best, while damage
+compounds monotonically from update 25 onward and then goes vertical.
+
+This is the clearest statement the project produces. Weight memory at this scale does not
+have a bad accuracy/cost trade-off — it has no trade-off, because the accuracy side never
+materializes while the cost side runs away.
+
+### ⚠️ The capability measure failed, and the perplexity measure is why both existed
+
+The design tracked capability two ways: continuous perplexity, and discrete probes on
+general knowledge the base model already had.
+
+**Only 1 of 6 discrete probes survived the validity filter.** The 1B reader could not
+reliably answer "What is 2 plus 2?", "What is the capital of France?", "How many days are
+in a week?", or "What is the largest ocean?" in this prompt format, so they were correctly
+excluded as unanswerable — a probe never known cannot be forgotten. That left a single
+binary probe, which is why the column reads 1.000 / 0.000 / 1.000 / 1.000 / 1.000 / 0.000.
+It is one coin, not a rate, and should be ignored.
+
+Perplexity carried the result alone. Having a continuous measure alongside a discrete one
+is what kept the run from producing nothing: the discrete measure was still reporting
+perfect capability at 50 updates while perplexity had already quadrupled.
+
+Fixing this means capability probes calibrated to a 1B model rather than to what an adult
+knows. Not re-run here, and the perplexity finding does not depend on it.
+
+**n=1 seed.** Given measured seed variance elsewhere in this document, the retention column
+in particular should not be read as precise.
+
+---
+
 ## 3. What the harness caught before any money was spent
 
 Every one of these produced output that looked completely normal.
