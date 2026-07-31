@@ -255,6 +255,75 @@ in particular should not be read as precise.
 
 ---
 
+## 2.6 Four anti-forgetting methods, and why none of them worked
+
+The forgetting result raises the obvious question: can the damage be prevented? Four
+composable mitigations, each motivated by one of the two measured failure modes rather than
+picked off a list. Llama-3.2-1B, rank 16, lr 2e-3, 25 update passes, 2 seeds, 6 valid probes.
+
+**The bar was fixed in source before any of these ran:** retention >= 0.50 **and**
+ppl_ratio <= 1.5x. Deliberately stricter than "beat the baseline", because beating a method
+that destroys the model is meaningless.
+
+| Method | Retention | Held-out ppl | Steps | Verdict |
+|---|---|---|---|---|
+| naive | 0.083 | 20,371x | 25 | damages, learns nothing |
+| replay | 0.000 | 46,717x | 50 | damages, learns nothing |
+| chat-format | 0.083 | 178x | 25 | damages, learns nothing |
+| replay+chatfmt | 0.083 | 5,019x | 50 | damages, learns nothing |
+| KL anchor | 0.000 | **1.51x** | 25 | safe, learns nothing |
+| ppl gate 1.5x | 0.000 | 1.70x | 6 | safe, learns nothing |
+| replay+chatfmt+gate | 0.000 | 116x | 9 | damages, learns nothing |
+| **everything** | 0.000 | **1.80x** | **23** | safe, learns nothing |
+
+### The finding
+
+**Damage is controllable across four and a half orders of magnitude. Retention is not
+controllable at all.** Perplexity spans 46,717x to 1.51x across these configs; retention
+never exceeds 0.083 and is exactly 0.000 in every configuration that controls damage.
+
+**`everything` rules out the "stopped too early" objection.** The gated configs learned
+nothing, but they also only ran 6-9 steps. `everything` ran **23 of 25 steps**, held the
+model at 1.80x, and still retained zero. Full training budget, model intact, nothing stuck.
+
+> At 1B with rank-16 LoRA, the update that encodes the fact and the update that damages the
+> model appear to be **the same update**. Every method that suppressed the damage suppressed
+> the learning by the same amount.
+
+### What each method actually did
+
+- **Replay made it worse** (46,717x vs naive's 20,371x). It doubles the step count, and
+  damage tracks steps. Rehearsal is the right tool for distributional drift and the wrong
+  tool for a diverging optimizer.
+- **Chat-format cut per-step damage ~114x** (178x vs 20,371x) with no retention benefit.
+  Wrapping text in the template the model expects lowers the loss, which shrinks the
+  gradient. It is a gradient-magnitude technique, not a memory technique.
+- **KL anchor produced the least damage of anything** (1.51x) and zero retention. This is
+  the stability-plasticity tradeoff at its stability extreme.
+- **The perplexity gate works only if it samples faster than the damage.** Plain gate:
+  checked every 1-2 steps, caught it at 1.70x. With replay: checked between epochs of 4-5
+  steps, and by the second check the model was at **116x**. Same controller, same threshold,
+  68x different outcome purely from checking granularity.
+
+### ⚠️ Caveats
+
+- **`kl_weight` was sampled at exactly one point (0.5), and it froze the model.** The entire
+  question is whether some weight buys retention before perplexity moves. That is a cheap
+  one-dimensional sweep and it has not been run. This result does not rule out a working KL
+  setting; it rules out *this* one.
+- **This "naive" is harsher than §2.5's.** Here 25 passes run under one optimizer, so Adam's
+  moments compound; the forgetting curve used 25 separate single-epoch calls with a fresh
+  optimizer each time. That earlier choice, made for reproducibility, was accidentally
+  protective by 2-3 orders of magnitude. 20,371x and 36.83x are not the same measurement.
+- **2 seeds, 6 probes.** Retention differences below ~0.17 are one probe on one seed.
+- **1B only.** 8B showed the lowest fact-NLL of any configuration measured (§2), so the
+  separability this run failed to find may exist at scale.
+- **MEMIT-style targeted editing was not implemented.** It is the one approach that does not
+  run gradient descent over the whole adapter, and therefore the one most likely to separate
+  what these four could not.
+
+---
+
 ## 3. What the harness caught before any money was spent
 
 Every one of these produced output that looked completely normal.
