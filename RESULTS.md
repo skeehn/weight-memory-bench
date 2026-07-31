@@ -9,6 +9,57 @@ makes the sizes comparable at all.
 
 ---
 
+## 0. The reader is the bottleneck, not retrieval
+
+LongMemEval dev, n=100, Llama-3.2-1B, greedy decoding. **Accuracy, not evidence recall.**
+
+| Arm | Tokens | Evidence recall | answered | acc \| answered | **acc over all** | fabrications |
+|---|---|---|---|---|---|---|
+| Full context | 105,708 | 1.000 | 0.740 | 0.216 | **0.160** | 3 |
+| Grep | 4,075 | 0.809 | 0.200 | 0.200 | **0.040** | 3 |
+| RAG | 4,061 | 0.968 | 0.230 | 0.174 | **0.040** | 1 |
+
+**Full context has the evidence 100% of the time and answers 16% of questions correctly.**
+No retrieval improvement can move a number capped that far below its own ceiling. On this
+benchmark, at this model size, retrieval quality is not what is being measured — the reader
+is. Evidence recall (§1) is the more informative measurement, and presenting accuracy as an
+upgrade to it would be backwards.
+
+Arm A also costs **20 seconds per query** (2,033s for 100) against grep's 0.7s. The
+expensive arm loses on tokens, on latency, and wins on accuracy only against baselines that
+are themselves near the floor.
+
+### What the three-number rule caught
+
+Grep and RAG return *identical* scores despite 53 of 100 answers differing and evidence
+recall of 0.809 vs 0.968. Not a caching bug — verified by diffing the cached generations.
+The reader is weak enough that a 16-point difference in evidence recall produces no
+difference in accuracy at all.
+
+And on the gameable metric, grep (0.200) looks competitive with full context (0.216). On
+the honest one it is **four times worse** (0.040 vs 0.160). The entire gap is that grep
+abstains 80% of the time and full context 26%. A benchmark reporting only
+`accuracy | answered` would conclude that keyword matching rivals a 106K-token window.
+
+### Sensitivity to the abstention definition
+
+The reader refuses in phrasings it was never told to use — "I can't answer that", "I don't
+have access to...". Detection is string matching and irreducibly fuzzy: "I don't have
+personal opinions, but I can provide..." is a partial refusal, "I'm happy to help! How..."
+is neither refusal nor answer. Across three versions of the marker list:
+
+```
+answered_rate            0.970 -> 0.740    moved 0.23
+accuracy_given_answered  0.175 -> 0.216    moved 0.04
+accuracy_over_all        0.170 -> 0.160    moved 0.01
+```
+
+`accuracy_over_all` is ~23x more stable, **not immune** — it moves because abstention takes
+precedence over a keyword match, so widening the refusal set can reclassify a response that
+carried the right answer beside a refusal phrase.
+
+---
+
 ## 1. Retrieval already wins the token argument
 
 LongMemEval-S dev split, n=100 (94 answerable). **Evidence recall** asks whether the arm
