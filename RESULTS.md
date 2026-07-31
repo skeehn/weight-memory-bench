@@ -9,21 +9,35 @@ makes the sizes comparable at all.
 
 ---
 
-## 0. The reader is the bottleneck, not retrieval
+## 0. Accuracy: the reader looks like the bottleneck
 
-LongMemEval dev, n=100, Llama-3.2-1B, greedy decoding. **Accuracy, not evidence recall.**
+LongMemEval **dev** split, n=100, Llama-3.2-1B, greedy decoding.
 
-| Arm | Tokens | Evidence recall | answered | acc \| answered | **acc over all** | fabrications |
-|---|---|---|---|---|---|---|
-| Full context | 105,708 | 1.000 | 0.740 | 0.216 | **0.160** | 3 |
-| Grep | 4,075 | 0.809 | 0.200 | 0.200 | **0.040** | 3 |
-| RAG | 4,061 | 0.968 | 0.230 | 0.174 | **0.040** | 1 |
+⚠️ **`dev` is the tuning split.** This repo implements stratified dev/test discipline
+precisely so results would be reported on `test`, and then reports dev. The 400-instance
+test split has not been run. Everything below is provisional.
+
+| Arm | Tokens | Evidence recall | answered | acc \| answered | **acc over all** | 95% CI | fabr |
+|---|---|---|---|---|---|---|---|
+| Full context | 105,708 | 1.000 | 0.740 | 0.216 | **0.160** | [0.101, 0.244] | 3 |
+| Grep | 4,075 | 0.809 | 0.200 | 0.200 | **0.040** | [0.016, 0.098] | 3 |
+| RAG | 4,061 | 0.968 | 0.230 | 0.174 | **0.040** | [0.016, 0.098] | 1 |
+
+Full context's interval does not overlap the retrieval arms', so that gap is real. Grep and
+RAG share a point estimate *and* an interval: they are **indistinguishable at n=100**, which
+is a weaker and different claim than being equal.
 
 **Full context has the evidence 100% of the time and answers 16% of questions correctly.**
-No retrieval improvement can move a number capped that far below its own ceiling. On this
-benchmark, at this model size, retrieval quality is not what is being measured — the reader
-is. Evidence recall (§1) is the more informative measurement, and presenting accuracy as an
-upgrade to it would be backwards.
+No retrieval improvement can move a number capped that far below its own ceiling.
+
+⚠️ **But "the reader is the bottleneck" is an inference, not a measurement.** Full context's
+16% is confounded with long-context degradation across 105,708 tokens of distractors. The
+`oracle` arm — built, unrun — hands the reader only the tagged evidence turns, a few hundred
+tokens with no distractors, and would separate the two. Until then the live alternative is
+that the reader is competent on clean evidence and failing on long noisy context: a
+different problem with different fixes.
+
+Evidence recall (§1) remains the better-supported measurement of the two.
 
 Arm A also costs **20 seconds per query** (2,033s for 100) against grep's 0.7s. The
 expensive arm loses on tokens, on latency, and wins on accuracy only against baselines that
@@ -31,10 +45,11 @@ are themselves near the floor.
 
 ### What the three-number rule caught
 
-Grep and RAG return *identical* scores despite 53 of 100 answers differing and evidence
-recall of 0.809 vs 0.968. Not a caching bug — verified by diffing the cached generations.
-The reader is weak enough that a 16-point difference in evidence recall produces no
-difference in accuracy at all.
+Grep and RAG return the same point estimate despite 53 of 100 answers differing and
+evidence recall of 0.809 vs 0.968. Not a caching bug — verified by diffing the cached
+generations. But with overlapping intervals of [0.016, 0.098], the correct reading is that
+a 16-point evidence-recall difference **does not resolve at n=100**, not that it produces no
+effect. Distinguishing those needs the test split.
 
 And on the gameable metric, grep (0.200) looks competitive with full context (0.216). On
 the honest one it is **four times worse** (0.040 vs 0.160). The entire gap is that grep
@@ -71,7 +86,7 @@ reader still has to use what it is handed.
 | A. Full context | 105,708 | 1.000 (94/94) |
 | B. Grep | 4,075 | 0.809 (76/94) |
 | C. RAG (BM25 + dense + RRF) | 4,061 | **0.968** (91/94) |
-| D. Weight memory | **0** | §2 |
+| D. Weight memory | **0** | §2 — toy corpus only, never run on LongMemEval |
 
 **This is not the result the project was designed around.** The premise was that retrieval
 is expensive and weight memory is cheap. Retrieval is not expensive: arm C reaches 96.8% of

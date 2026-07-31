@@ -27,18 +27,31 @@ this project was built on — that retrieval is expensive and weight memory is c
 wrong. Weight memory is not competing against an expensive strawman. It is competing
 against something already cheap and already near the ceiling.
 
-### 2. The reader is the bottleneck, not retrieval
+### 2. The reader looks like the bottleneck, not retrieval
 
-| Arm | answered | acc \| answered | **acc over all** |
-|---|---|---|---|
-| Full context | 0.740 | 0.216 | **0.160** |
-| Grep | 0.200 | 0.200 | **0.040** |
-| RAG | 0.230 | 0.174 | **0.040** |
+**Dev split, n=100.** This is the *tuning* split — see the caveats; the 400-instance test
+split has not been run.
 
-**Full context has the evidence 100% of the time and answers 16% correctly.** No retrieval
-improvement can move a number capped that far below its own ceiling. Grep and RAG score
-*identically* despite 53 of 100 answers differing and a 16-point evidence-recall gap — the
-reader is too weak for retrieval quality to propagate into accuracy at all.
+| Arm | answered | acc \| answered | **acc over all** | 95% CI |
+|---|---|---|---|---|
+| Full context | 0.740 | 0.216 | **0.160** | [0.101, 0.244] |
+| Grep | 0.200 | 0.200 | **0.040** | [0.016, 0.098] |
+| RAG | 0.230 | 0.174 | **0.040** | [0.016, 0.098] |
+
+**Full context has the evidence 100% of the time and answers 16% correctly.** Its interval
+does not overlap the retrieval arms', so that gap is real.
+
+Grep and RAG return the same point estimate, but their intervals are identical and wide:
+the honest statement is that they are **indistinguishable at n=100**, not that they are
+equal. 4 hits out of 100 carries almost no information. Their 53-of-100 differing answers
+and 16-point evidence-recall gap simply do not resolve at this sample size.
+
+⚠️ **"The reader is the bottleneck" is the natural reading, but it is not established
+here.** Full context's 16% is confounded with long-context degradation across 105,708
+tokens of distractors. The `oracle` arm (built, unrun) separates those by handing the reader
+only the tagged evidence turns — a few hundred tokens, no distractors. Until it runs, the
+alternative explanation is live: the reader may be fine on clean evidence and failing on
+long noisy context, which is a different problem with different fixes.
 
 Full context also costs **20 seconds per query** against grep's 0.7s. It loses on tokens, on
 latency, and beats baselines that are themselves near the floor.
@@ -93,6 +106,14 @@ memory system updates forever. This is that regime.
 Stated here rather than buried, because a results document without this section is
 advertising.
 
+- **Every accuracy number is on the `dev` split, which is the tuning split.** The repo
+  implements stratified dev/test discipline specifically so results would be reported on
+  `test`, and then reports dev. The 400-instance test split has not been run. Treat the
+  accuracy table as provisional.
+- **The reader-vs-retrieval attribution is not established**, only suggested. The `oracle`
+  arm exists to settle it and has not been run.
+- **Weight memory has no LongMemEval number at all.** Findings 3 and 4 come from a
+  16-episode toy corpus. The four-arm framing overstates how directly comparable that is.
 - **The capability probe measure failed.** Only 1 of 6 general-knowledge probes survived
   validity filtering — a 1B reader cannot reliably answer "What is 2 plus 2?" in this prompt
   format. That column is a single coin flip. Perplexity carried the forgetting result alone.
