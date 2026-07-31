@@ -1,0 +1,214 @@
+{
+  "retention_floor": 0.5,
+  "ppl_ceiling": 1.5,
+  "chat_format": true,
+  "updates": 25,
+  "seeds": 2,
+  "summary": [
+    {
+      "kl_weight": 0.0,
+      "retention": 0.08333333333333333,
+      "ppl_ratio": 178.5519614093534
+    },
+    {
+      "kl_weight": 0.005,
+      "retention": 0.0,
+      "ppl_ratio": 1.1517221626300786
+    },
+    {
+      "kl_weight": 0.02,
+      "retention": 0.0,
+      "ppl_ratio": 1.2288300056061625
+    },
+    {
+      "kl_weight": 0.05,
+      "retention": 0.0,
+      "ppl_ratio": 1.298211989619449
+    },
+    {
+      "kl_weight": 0.1,
+      "retention": 0.0,
+      "ppl_ratio": 1.2870411664292045
+    },
+    {
+      "kl_weight": 0.25,
+      "retention": 0.0,
+      "ppl_ratio": 1.3498483011007423
+    },
+    {
+      "kl_weight": 0.5,
+      "retention": 0.0,
+      "ppl_ratio": 1.2282966230082444
+    }
+  ],
+  "rows": [
+    {
+      "method": "kl0",
+      "config": "chatfmt",
+      "seed": 0,
+      "retention": 0.16666666666666666,
+      "heldout_ppl": 9706.2744140625,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 315.6922239727996,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0",
+      "config": "chatfmt",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 1273.2442626953125,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 41.4116988459072,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.005",
+      "config": "chatfmt+kl0.005",
+      "seed": 0,
+      "retention": 0.0,
+      "heldout_ppl": 34.900779724121094,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.1351322144292337,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.005",
+      "config": "chatfmt+kl0.005",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 35.920928955078125,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.1683121108309236,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.02",
+      "config": "chatfmt+kl0.02",
+      "seed": 0,
+      "retention": 0.0,
+      "heldout_ppl": 36.07451248168945,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.1733073461821177,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.02",
+      "config": "chatfmt+kl0.02",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 39.488712310791016,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.2843526650302073,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.05",
+      "config": "chatfmt+kl0.05",
+      "seed": 0,
+      "retention": 0.0,
+      "heldout_ppl": 38.94911575317383,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.266802528896055,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.05",
+      "config": "chatfmt+kl0.05",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 40.88054656982422,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.3296214503428432,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.1",
+      "config": "chatfmt+kl0.1",
+      "seed": 0,
+      "retention": 0.0,
+      "heldout_ppl": 35.07443618774414,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.1407803130579914,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.1",
+      "config": "chatfmt+kl0.1",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 44.06830978393555,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.4333020198004176,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.25",
+      "config": "chatfmt+kl0.25",
+      "seed": 0,
+      "retention": 0.0,
+      "heldout_ppl": 39.8256721496582,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.2953121327295114,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.25",
+      "config": "chatfmt+kl0.25",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 43.1792106628418,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.404384469471973,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.5",
+      "config": "chatfmt+kl0.5",
+      "seed": 0,
+      "retention": 0.0,
+      "heldout_ppl": 33.993648529052734,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.105628178978584,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.5",
+      "config": "chatfmt+kl0.5",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 41.53677749633789,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.3509650670379045,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    }
+  ]
+}
