@@ -93,6 +93,47 @@ class Model:
                     out.append({"id": item.get("id"), "error": f"{type(exc).__name__}: {exc}"})
             return {"size": size, "count": len(out), "results": out}
 
+        if action == "sweep":
+            # lr x step-budget sweep with augmentation, the Stage 1 experiment.
+            from scripts.stage1_sweep import main as sweep_main
+            import sys
+
+            argv = ["stage1_sweep"]
+            for key in ("facts", "seeds", "generated"):
+                if key in request:
+                    argv += [f"--{key}", str(request[key])]
+            if request.get("lrs"):
+                argv += ["--lrs"] + [str(x) for x in request["lrs"]]
+            if request.get("epochs"):
+                argv += ["--epochs"] + [str(x) for x in request["epochs"]]
+            argv += ["--out", str(RESULTS_DIR / "sweep.json")]
+            old, sys.argv = sys.argv, argv
+            try:
+                sweep_main()
+            except Exception as exc:
+                return {"error": f"{type(exc).__name__}: {exc}",
+                        "traceback": traceback.format_exc()[-2500:]}
+            finally:
+                sys.argv = old
+            path = RESULTS_DIR / "sweep.json"
+            return json.loads(path.read_text()) if path.exists() else {"error": "no output"}
+
+        if action == "alphaedit":
+            from scripts.alphaedit_experiment import run as alphaedit_run
+
+            try:
+                result = alphaedit_run(
+                    n_facts=int(request.get("facts", 20)),
+                    threshold=float(request.get("threshold", 2e-2)),
+                    edit_steps=int(request.get("edit_steps", 25)),
+                    edit_lr=float(request.get("edit_lr", 0.5)),
+                )
+            except Exception as exc:
+                return {"error": f"{type(exc).__name__}: {exc}",
+                        "traceback": traceback.format_exc()[-2500:]}
+            (RESULTS_DIR / "alphaedit.json").write_text(json.dumps(result, indent=2))
+            return result
+
         if action == "forgetting":
             from scripts.forgetting_curve import run_curve
 
