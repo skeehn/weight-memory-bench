@@ -1,0 +1,14 @@
+{
+  "counts": {
+    "empty": 0,
+    "prose": 33,
+    "repeated": 41,
+    "short": 10,
+    "structured": 27,
+    "unicode": 12,
+    "whitespace_heavy": 9
+  },
+  "tokenizer_fingerprint": "b47fcb7017102fb3",
+  "tokenizer_model": "unsloth/Llama-3.2-1B-Instruct",
+  "tokenizer_revision": "main"
+}

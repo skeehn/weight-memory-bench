@@ -1,0 +1,14 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Results are kept deliberately, not by accident -- the ledger is the artifact. But local
+# scratch runs are not.
+runs/scaling_local.json
+
+.env
+.trussrc
+*.key
+.DS_Store

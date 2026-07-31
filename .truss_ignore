@@ -1,0 +1,18 @@
+# The remote job builds its own environment from the base image plus run.sh, so shipping
+# the local virtualenv would upload 827MB to replace it with 600KB of code that gets
+# reinstalled anyway. It is also platform-wrong: macOS arm64 wheels on a CUDA Linux host.
+.venv/
+venv/
+
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Results are outputs, not inputs. The remote run writes its own.
+runs/
+*.jsonl
+
+# Never ship credentials.
+.trussrc
+.env
+*.key

@@ -1,0 +1,29 @@
+[project]
+name = "weight-memory-bench"
+version = "0.1.0"
+description = "Measuring memory-in-weights against memory-in-a-vector-store: retention, token cost, and forgetting."
+requires-python = ">=3.12"
+dependencies = [
+    "transformers>=4.44",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+# BEAM only. Kept out of the core install so `datasets` is not pulled in for a repo that
+# can do all of its LongMemEval work without it.
+beam = ["datasets>=3.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["harness", "arms", "data"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Model-loading tests are excluded by default so the suite stays a fast feedback loop.
+# Run them with: uv run pytest -m slow
+addopts = "-m 'not slow'"
+markers = ["slow: loads the reader model (~2.5GB) and runs gradient updates"]

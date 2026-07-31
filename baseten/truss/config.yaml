@@ -1,0 +1,43 @@
+model_name: weight-memory-scaling
+python_version: py311
+
+resources:
+  accelerator: L4
+  use_gpu: true
+  cpu: "4"
+  memory: 16Gi
+
+requirements:
+  - torch==2.5.1
+  - transformers>=4.44
+  - peft>=0.11
+  - numpy>=1.26
+  - accelerate>=0.30
+
+# Weights are baked into the image at BUILD time, which is not billed as inference. Without
+# this, every cold start would re-download ~24GB across the three rungs and the whole
+# budget would go to network transfer rather than measurement. Scale-to-zero makes cold
+# starts frequent, so this is the difference between a $1 run and an impossible one.
+#
+# `use_volume: false` bakes the weights into the image rather than mounting them from a
+# volume. That keeps `from_pretrained(repo_id)` working unchanged -- the volume path would
+# require rewriting every load site to point at a mount, for no benefit here since the
+# weights are read-only and identical on every replica.
+model_cache:
+  - repo_id: unsloth/Llama-3.2-1B-Instruct
+    use_volume: false
+  - repo_id: unsloth/Llama-3.2-3B-Instruct
+    use_volume: false
+  - repo_id: unsloth/Meta-Llama-3.1-8B-Instruct
+    use_volume: false
+
+runtime:
+  predict_concurrency: 1
+  # One rung can run for several minutes. The client may still time out; `model.py` writes
+  # every completed rung to disk so a lost HTTP response never means lost GPU time.
+  streaming_read_timeout: 1800
+
+# Never bill for an idle replica. This is the setting that decides whether a forgotten
+# deployment costs nothing or costs everything.
+environment_variables: {}
+secrets: {}
