@@ -127,13 +127,18 @@ def build_arm(name: str, budget: int, dense: bool):
     raise ValueError(f"unknown arm {name!r}")
 
 
-def activate_and_wait(key: str, timeout: int = 900) -> None:
+def activate_and_wait(key: str, timeout: int = 2400) -> None:
     """Wake the target deployment and block until it can serve.
 
     Necessary because `deactivate` is NOT scale-to-zero. A scaled-to-zero deployment wakes
     on request; a deactivated one is off and stays off, so calls against it fail as broken
     pipes rather than as anything diagnosable. The cost-safety teardown therefore makes the
     next run impossible unless it explicitly turns the deployment back on.
+
+    The timeout is generous because `model_cache` bakes ~24GB of weights into the image, so
+    a cold start pulls all of it before serving. That choice made the sweep cheap -- no
+    repeated downloads at inference time -- and it makes every wake-up slow. A 900s timeout
+    was not enough and aborted a run on a deployment that was progressing normally.
     """
     api = f"https://api.baseten.co/v1/models/{MODEL_ID}/deployments"
 
