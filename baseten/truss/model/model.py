@@ -88,7 +88,12 @@ class Model:
         result["rank"] = rank
         result["lr"] = lr
         result["epochs"] = epochs
-        (RESULTS_DIR / f"{size}.json").write_text(json.dumps(result, indent=2))
+
+        # Keyed by the full configuration, not just the size. Keying on size alone meant
+        # four learning rates at one size silently overwrote each other, leaving only the
+        # last -- and the whole point of the sweep is comparing them.
+        key = f"{size}_lr{lr:g}_r{rank}_e{epochs}"
+        (RESULTS_DIR / f"{key}.json").write_text(json.dumps(result, indent=2))
 
         # Free the GPU before the next rung is requested. Without this, 1B's allocator
         # blocks still hold memory when 8B tries to load onto the same 24GB card.

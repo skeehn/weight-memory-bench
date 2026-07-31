@@ -105,6 +105,13 @@ def run_one(size: str, model_name: str, seeds: int, rank: int, lr: float, epochs
         "valid_probes": n,
         "excluded": excluded,
         "seeds": seeds,
+        # Individual rates, not just the summary. A mean with a standard deviation cannot
+        # be turned back into per-seed ledger rows, and seed is one of the eight required
+        # provenance fields -- so discarding these makes the results unrecordable at the
+        # granularity the harness demands.
+        "per_seed_rates": rates,
+        "per_seed_nll": nlls,
+        "probe_ids": [q for q, _ in valid],
         "mean_recall": stats.mean(rates),
         "min_recall": min(rates),
         "max_recall": max(rates),
