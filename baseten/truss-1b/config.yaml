@@ -1,0 +1,37 @@
+model_name: weight-memory-1b
+python_version: py311
+
+# Single small L4. The 1B model is ~2.5GB of weights; asking for more only makes Baseten
+# schedule a larger instance and bill accordingly. The three-model deployment got upgraded
+# to 2xL4/48GiB because its resource request was generous and its image was enormous.
+resources:
+  accelerator: L4
+  use_gpu: true
+  cpu: "2"
+  memory: 8Gi
+
+requirements:
+  - torch==2.5.1
+  - transformers>=4.44
+  - peft>=0.11
+  - numpy>=1.26
+  - accelerate>=0.30
+
+# ONE model, not three.
+#
+# The scaling sweep genuinely needed 1B, 3B and 8B in one image so all three rungs ran on
+# identical hardware in one process. Everything after it -- the accuracy pass and the
+# forgetting curve -- only ever needed 1B, and carrying the other 24GB made each new deploy
+# build and pull an image an order of magnitude larger than necessary. One of those deploys
+# sat in DEPLOYING for over an hour and never served.
+#
+# The lesson is not "model_cache is bad": it made the sweep cheap by eliminating runtime
+# downloads. It is that the right cache contents depend on the job, and reusing one image
+# for a different job silently inherits its costs.
+model_cache:
+  - repo_id: unsloth/Llama-3.2-1B-Instruct
+    use_volume: false
+
+runtime:
+  predict_concurrency: 1
+  streaming_read_timeout: 1800

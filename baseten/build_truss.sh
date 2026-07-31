@@ -6,8 +6,12 @@
 # before every push.
 set -euo pipefail
 
+# Usage: build_truss.sh [truss|truss-1b]
+# truss     = all three models, for the scaling sweep
+# truss-1b  = 1B only, ~2.5GB image instead of ~24GB, for everything else
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TRUSS="$ROOT/baseten/truss"
+TRUSS="$ROOT/baseten/${1:-truss}"
 PKG="$TRUSS/packages"
 
 rm -rf "$PKG"
