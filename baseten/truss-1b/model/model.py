@@ -93,6 +93,24 @@ class Model:
                     out.append({"id": item.get("id"), "error": f"{type(exc).__name__}: {exc}"})
             return {"size": size, "count": len(out), "results": out}
 
+        if action == "forgetting":
+            from scripts.forgetting_curve import run_curve
+
+            try:
+                result = run_curve(
+                    checkpoints=request.get("checkpoints", [0, 10, 25, 50, 100]),
+                    rank=int(request.get("rank", 16)),
+                    lr=float(request.get("lr", 2e-3)),
+                    seed=int(request.get("seed", 0)),
+                    size=request.get("size", "1B"),
+                )
+            except Exception as exc:
+                return {"error": f"{type(exc).__name__}: {exc}", "traceback": traceback.format_exc()[-2000:]}
+            (RESULTS_DIR / f"forgetting_{result['size']}_seed{result['seed']}.json").write_text(
+                json.dumps(result, indent=2)
+            )
+            return result
+
         if action == "fetch":
             return {"action": "fetch", "results": self._saved()}
 

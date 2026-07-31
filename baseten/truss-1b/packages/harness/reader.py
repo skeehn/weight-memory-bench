@@ -29,6 +29,61 @@ SYSTEM_PROMPT = (
 
 ABSTENTION_STRING = "i don't know"
 
+# Models refuse in whatever words they like, regardless of the phrase they were told to
+# use. Measured on real output: "I can't answer that", "I can't help you with that", "I
+# don't have any information about...", "I don't have access to...". Matching only the
+# sanctioned phrase scored all of those as wrong *answers*, moving grep's answered_rate
+# from 0.29 to 0.22 and rag's from 0.29 to 0.25.
+#
+# **This list will never be exactly right, and that is the point worth recording.** Refusal
+# detection by string matching is irreducibly fuzzy. "I don't have personal opinions, but I
+# can provide..." is a partial refusal; "I'm happy to help! How..." is a deflection that is
+# neither a refusal nor an answer. Any line drawn here is a judgement call, and moving it
+# moves `answered_rate` and `accuracy_given_answered`.
+#
+# Measured sensitivity to where that line is drawn, across three versions of this list:
+#
+#   answered_rate          0.970 -> 0.740   moved 0.23
+#   accuracy_given_answered 0.175 -> 0.216   moved 0.04
+#   accuracy_over_all       0.170 -> 0.160   moved 0.01
+#
+# So `accuracy_over_all` is roughly 23x more stable, NOT immune. It moves because
+# `score_response` gives abstention precedence over a keyword match, so widening the
+# refusal set can reclassify a response that contained the right answer next to a refusal
+# phrase. That precedence rule is still correct -- a hedged non-answer is not an answer --
+# but it does couple the honest metric to this judgement call, weakly.
+#
+# The defensible claim is therefore the quantitative one, not "immune".
+ABSTENTION_MARKERS = (
+    "i don't know",
+    "i do not know",
+    "i can't answer",
+    "i cannot answer",
+    "i can't help",
+    "i cannot help",
+    "i'm not able to",
+    "i am not able to",
+    "unable to answer",
+    "don't have that information",
+    "do not have that information",
+    "no information about",
+    "not mentioned",
+    "isn't mentioned",
+    "not specified",
+    "don't have any information",
+    "do not have any information",
+    "don't have access",
+    "do not have access",
+    "can't provide information",
+    "cannot provide information",
+)
+
+
+def is_abstention(text: str) -> bool:
+    """Whether a response is a refusal, in any phrasing the reader actually uses."""
+    lowered = text.strip().lower()
+    return any(marker in lowered for marker in ABSTENTION_MARKERS)
+
 DEFAULT_MAX_NEW_TOKENS = 32
 
 
@@ -58,7 +113,7 @@ class Generation:
         sanctioned phrase but not reliably alone, and scoring "I don't know." as an attempt
         would inflate `answered_rate` with non-answers.
         """
-        return ABSTENTION_STRING in self.text.strip().lower()
+        return is_abstention(self.text)
 
 
 class Reader:

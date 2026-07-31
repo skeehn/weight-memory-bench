@@ -78,9 +78,9 @@ def score_response(text: str, expected: str, is_abstention_probe: bool = False) 
     On an abstention probe -- one whose answer is genuinely absent from the haystack --
     declining is the correct behaviour, and answering anyway is a fabrication.
     """
-    from .reader import ABSTENTION_STRING
+    from .reader import is_abstention
 
-    abstained = ABSTENTION_STRING in text.strip().lower()
+    abstained = is_abstention(text)
 
     if is_abstention_probe:
         return Probe(answered=not abstained, correct=abstained, fabricated=not abstained)
