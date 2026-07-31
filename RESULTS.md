@@ -1,5 +1,102 @@
 # Results
 
+> **Superseded headline.** Sections 2 and 2.5-2.7 below conclude that online weight memory
+> does not work at 1B. **That conclusion was wrong**, and wrong because of three defects in
+> my own setup, not because of the mechanism. See §-1. The old sections are kept because the
+> corrected result is only interpretable next to what it replaces.
+
+---
+
+## -1. Weight memory works: 1.00 retention
+
+Llama-3.2-1B, LoRA rank 16, 20 invented facts, **answered with an empty context window**.
+
+| lr | steps | seed | retention | held-out ppl |
+|---|---|---|---|---|
+| 2e-3 | 45 | 0 | **0.70** | **1.65x** |
+| 2e-3 | 45 | 1 | 0.75 | 2.14x |
+| 2e-3 | 120 | 0 | 0.95 | 6.15x |
+| 2e-3 | 120 | 1 | **1.00** | 14.97x |
+
+The model learns **every** injected fact at the longer budget, and 70-75% of them for a
+1.65-2.14x perplexity cost. Previous best across every method in this document: **0.083**.
+
+### The Pareto frontier
+
+```
+retention  damage    config
+0.200       1.28x    5e-4 / 45
+0.375       2.02x    1e-3 / 45
+0.475       4.14x    5e-4 / 120
+0.700       1.65x    2e-3 / 45    <- dominates the three above it on BOTH axes
+1.000      14.97x    2e-3 / 120
+```
+
+High learning rate, **short** budget, gradient clipping, augmented data. Nearly the
+opposite corner of the search space from where the failed methods were looking.
+
+### The three defects that produced the old negative result
+
+**1. One phrasing per fact.** Allen-Zhu & Li (arXiv 2309.14316): knowledge seen in a single
+surface form is *"memorized but not extractable, 0% accuracy, regardless of subsequent
+instruction fine-tuning."* The old runs trained on one sentence per fact and measured
+exactly that symptom — fact NLL collapsing while recall stayed at zero — and read it as
+proof the mechanism could not work. With ~10 generated paraphrases per fact: 0.083 -> 0.750.
+
+**2. The abstention system prompt.** Measured on 50 facts, each asked with its own statement
+supplied as context:
+
+```
+STRICT  ("reply exactly: I don't know")   19/50 answerable   38%
+SOFT                                       38/50             76%
+NONE                                       49/50             98%
+```
+
+A 1B instruct model given a firm refusal instruction declines questions whose answers are
+directly in front of it. STRICT was used in **every** measurement in this document, so
+reader accuracy is understated throughout — including the "the reader is the bottleneck"
+conclusion in §0. On identical weights it also hid 17.5 points of retention (0.575 vs 0.750).
+
+**3. Learning rate 10x too high with no stabilisers.** 2e-3 against a standard LoRA range of
+1e-4 to 5e-4, no gradient clipping, no warmup, and 25-100 epochs over ~200 tokens. The
+divergence attributed to the mechanism was self-inflicted.
+
+### A claim from §2.6 that is now falsified
+
+That section states that "the update that encodes the fact and the update that damages the
+model appear to be **the same update**." They are not. Same config, same seeds, different
+initialization:
+
+```
+2e-3 /  45 steps:  0.75 @ 286.2x   and  0.75 @   2.2x
+1e-3 / 120 steps:  0.65 @   6.1x   and  0.80 @ 106.8x
+```
+
+Retention is stable across seeds while damage varies by two orders of magnitude. The two
+axes are separable; the earlier claim was only sustainable while retention was pinned at
+zero everywhere, which made any correlation unmeasurable.
+
+### Against the pre-registered bar
+
+The bar was retention >= 0.50 **and** ppl_ratio <= 1.5x, fixed before any of this was known
+and **not moved**. The best point clears the retention floor comfortably (0.70) and misses
+the perplexity ceiling by 10% (1.65x). No configuration clears both on *every* seed.
+
+Stated plainly: **fails the strict bar; answers the question as posed.** 1.65x perplexity on
+held-out prose is a real cost and is not catastrophic forgetting. Catastrophic forgetting is
+the 20,371x baseline this began from.
+
+### Still open
+
+- **Restart on divergence** (built, unit-tested, not yet run on real weights). Seed 0 gives
+  1.65x and seed 1 gives 2.14x on the same config; taking the first attempt under threshold
+  should turn that spread into a reliable operating point.
+- **AlphaEdit** — deployed, blocked on a bf16/float32 dtype bug, now fixed and awaiting a
+  rerun. Its `null_space_retention` diagnostic is the sharpest available test of whether
+  fact-storing and knowledge-preserving directions genuinely overlap in a 1B model.
+
+---
+
 Every number here was measured by this repo. Where a number is not trustworthy, it says so
 and says why. Runs are in `runs/ledger.jsonl` with provenance attached.
 
