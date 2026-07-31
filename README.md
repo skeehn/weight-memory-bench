@@ -63,7 +63,11 @@ The usable learning-rate window is **narrower than a factor of two** — 1B is 0
 impractical on its own terms: outside it, everything reads as an identical zero, so there is
 no gradient to tune along.
 
+![Cost against accuracy](charts/cost_vs_accuracy.svg)
+
 ### 4. Online updating destroys the model without establishing the memory
+
+![Forgetting curve](charts/forgetting_curve.svg)
 
 100 updates applied as **one continuous stream**, not independent fine-tunes:
 

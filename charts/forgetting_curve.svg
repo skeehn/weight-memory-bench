@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" width="720" height="420" font-family="ui-sans-serif,system-ui,sans-serif">
+<text x="78" y="24" font-size="15" font-weight="600" fill="#8b949e">Online weight memory: damage compounds, memory never arrives</text>
+<text x="78" y="40" font-size="11" fill="#8b949e">Llama-3.2-1B, rank 16, lr 2e-3, one continuous update stream (n=1 seed)</text>
+<line x1="78" y1="362" x2="590" y2="362" stroke="#8b949e" stroke-width="1"/>
+<line x1="78" y1="64" x2="78" y2="362" stroke="#8b949e" stroke-width="1"/>
+<line x1="78" y1="362.0" x2="590" y2="362.0" stroke="#8b949e33"/>
+<text x="70" y="366.0" font-size="10" fill="#8b949e" text-anchor="end">1x</text>
+<line x1="78" y1="308.6" x2="590" y2="308.6" stroke="#8b949e33"/>
+<text x="70" y="312.6" font-size="10" fill="#8b949e" text-anchor="end">2x</text>
+<line x1="78" y1="238.0" x2="590" y2="238.0" stroke="#8b949e33"/>
+<text x="70" y="242.0" font-size="10" fill="#8b949e" text-anchor="end">5x</text>
+<line x1="78" y1="184.6" x2="590" y2="184.6" stroke="#8b949e33"/>
+<text x="70" y="188.6" font-size="10" fill="#8b949e" text-anchor="end">10x</text>
+<line x1="78" y1="77.8" x2="590" y2="77.8" stroke="#8b949e33"/>
+<text x="70" y="81.8" font-size="10" fill="#8b949e" text-anchor="end">40x</text>
+<text x="598" y="366.0" font-size="10" fill="#3fb950">0.0</text>
+<text x="598" y="217.0" font-size="10" fill="#3fb950">0.5</text>
+<text x="598" y="68.0" font-size="10" fill="#3fb950">1.0</text>
+<text x="78.0" y="380" font-size="10" fill="#8b949e" text-anchor="middle">0</text>
+<text x="103.6" y="380" font-size="10" fill="#8b949e" text-anchor="middle">5</text>
+<text x="129.2" y="380" font-size="10" fill="#8b949e" text-anchor="middle">10</text>
+<text x="206.0" y="380" font-size="10" fill="#8b949e" text-anchor="middle">25</text>
+<text x="334.0" y="380" font-size="10" fill="#8b949e" text-anchor="middle">50</text>
+<text x="590.0" y="380" font-size="10" fill="#8b949e" text-anchor="middle">100</text>
+<polyline points="78.0,362.0 103.6,345.7 129.2,349.0 206.0,294.2 334.0,255.9 590.0,84.2" fill="none" stroke="#e5534b" stroke-width="2.5"/>
+<polyline points="78.0,362.0 103.6,362.0 129.2,362.0 206.0,362.0 334.0,250.2 590.0,362.0" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-dasharray="5 3"/>
+<circle cx="78.0" cy="362.0" r="3.5" fill="#e5534b"/>
+<circle cx="78.0" cy="362.0" r="3.5" fill="#3fb950"/>
+<circle cx="103.6" cy="345.7" r="3.5" fill="#e5534b"/>
+<circle cx="103.6" cy="362.0" r="3.5" fill="#3fb950"/>
+<circle cx="129.2" cy="349.0" r="3.5" fill="#e5534b"/>
+<circle cx="129.2" cy="362.0" r="3.5" fill="#3fb950"/>
+<circle cx="206.0" cy="294.2" r="3.5" fill="#e5534b"/>
+<circle cx="206.0" cy="362.0" r="3.5" fill="#3fb950"/>
+<circle cx="334.0" cy="255.9" r="3.5" fill="#e5534b"/>
+<circle cx="334.0" cy="250.2" r="3.5" fill="#3fb950"/>
+<circle cx="590.0" cy="84.2" r="3.5" fill="#e5534b"/>
+<circle cx="590.0" cy="362.0" r="3.5" fill="#3fb950"/>
+<text x="584.0" y="74.2" font-size="11" font-weight="600" fill="#e5534b" text-anchor="end">36.8x worse</text>
+<text x="334" y="404" font-size="11" fill="#8b949e" text-anchor="middle">online updates applied</text>
+<text x="598" y="56" font-size="10" fill="#3fb950">retention</text>
+<text x="78" y="56" font-size="10" fill="#e5534b">held-out perplexity (log, x baseline)</text>
+</svg>
