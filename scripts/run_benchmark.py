@@ -79,8 +79,10 @@ def remote_generate(
     are ordinary, not exceptional, and a benchmark driver that treats them as fatal will
     keep losing paid work at random points.
 
-    Only transport errors are retried. An HTTP error from the server is a real answer about
-    a real problem and retrying it just pays twice for the same failure.
+    HTTPError is caught explicitly and FIRST, because it subclasses URLError -- so catching
+    URLError alone silently retries server errors too. A 4xx means the request is wrong and
+    will be wrong every time; retrying it just burns the clock. Only 5xx and 429 are worth
+    another attempt.
     """
     payload = json.dumps({"action": "generate", "size": size, "items": items}).encode()
     last: Exception | None = None
@@ -93,12 +95,20 @@ def remote_generate(
             )
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return json.loads(response.read())["results"]
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 and exc.code != 429:
+                body = exc.read()[:300].decode("utf-8", "replace")
+                raise RuntimeError(f"HTTP {exc.code} (not retryable): {body}") from exc
+            last = exc
+            reason = f"HTTP {exc.code}"
         except (ssl.SSLError, urllib.error.URLError, TimeoutError, ConnectionError) as exc:
             last = exc
-            if attempt < attempts - 1:
-                delay = 2**attempt
-                print(f"\n  transport error ({type(exc).__name__}), retry in {delay}s")
-                time.sleep(delay)
+            reason = type(exc).__name__
+
+        if attempt < attempts - 1:
+            delay = 2**attempt
+            print(f"\n  retryable failure ({reason}), retry in {delay}s")
+            time.sleep(delay)
     raise RuntimeError(f"batch failed after {attempts} attempts: {last}")
 
 
@@ -115,6 +125,52 @@ def build_arm(name: str, budget: int, dense: bool):
             embedder = SentenceTransformerEmbedder()
         return RagArm(budget=budget, embedder=embedder)
     raise ValueError(f"unknown arm {name!r}")
+
+
+def activate_and_wait(key: str, timeout: int = 900) -> None:
+    """Wake the target deployment and block until it can serve.
+
+    Necessary because `deactivate` is NOT scale-to-zero. A scaled-to-zero deployment wakes
+    on request; a deactivated one is off and stays off, so calls against it fail as broken
+    pipes rather than as anything diagnosable. The cost-safety teardown therefore makes the
+    next run impossible unless it explicitly turns the deployment back on.
+    """
+    api = f"https://api.baseten.co/v1/models/{MODEL_ID}/deployments"
+
+    def status() -> str:
+        request = urllib.request.Request(api, headers={"Authorization": f"Api-Key {key}"})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            for dep in json.loads(response.read())["deployments"]:
+                if dep["id"] == DEPLOYMENT_ID:
+                    return dep["status"]
+        return "MISSING"
+
+    current = status()
+    if current == "ACTIVE":
+        return
+    print(f"deployment {DEPLOYMENT_ID} is {current}; activating")
+    try:
+        post = urllib.request.Request(
+            f"{api}/{DEPLOYMENT_ID}/activate",
+            data=b"",
+            headers={"Authorization": f"Api-Key {key}"},
+        )
+        with urllib.request.urlopen(post, timeout=60):
+            pass
+    except urllib.error.HTTPError as exc:
+        if exc.code != 400:  # 400 == already active, which is fine
+            raise
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        current = status()
+        if current == "ACTIVE":
+            print("  active")
+            return
+        if current in {"BUILD_FAILED", "DEPLOY_FAILED", "FAILED", "MISSING"}:
+            raise RuntimeError(f"deployment is {current}")
+        time.sleep(15)
+    raise RuntimeError(f"deployment did not become ACTIVE within {timeout}s")
 
 
 def deactivate_all(key: str) -> None:
@@ -177,6 +233,7 @@ def main() -> None:
     args = parser.parse_args()
 
     key = api_key()
+    activate_and_wait(key)
     if not args.keep_warm:
         import atexit
 
