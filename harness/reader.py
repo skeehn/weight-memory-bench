@@ -18,14 +18,46 @@ from functools import lru_cache
 
 from .tokens import READER_MODEL, READER_REVISION
 
-# The abstention instruction is part of the shared contract, not an arm's choice. Without a
-# sanctioned way to decline, the 30 abstention probes can only be failed, and `answered_rate`
-# stops measuring calibration and starts measuring nothing.
-SYSTEM_PROMPT = (
-    "You answer questions about a user's past conversations. "
-    "Answer in as few words as possible. "
-    "If the information needed is not available to you, reply exactly: I don't know."
-)
+# MEASURED: the abstention instruction destroys most of this model's in-context extraction.
+# On 50 facts, each asked with its own statement supplied as context:
+#
+#   STRICT   ("reply exactly: I don't know")   19/50 answerable   38%
+#   SOFT     (decline only if genuinely absent) 38/50             76%
+#   NONE     (no abstention clause)             49/50             98%
+#
+# A 1B instruct model given a firm refusal instruction over-applies it and declines questions
+# whose answers are directly in front of it. Every measurement produced before this was
+# discovered used STRICT, which means reader accuracy was understated throughout and any
+# probe marked "unanswerable in context" must be re-checked.
+#
+# The right prompt depends on the experiment, so this is no longer one global string:
+#
+#   NONE  — for closed-world retention work, where every probe's answer was injected and
+#           there is nothing to legitimately decline. Using STRICT there measures the
+#           model's willingness to speak, not whether it learned anything.
+#   SOFT  — for LongMemEval, which contains 30 genuinely unanswerable probes. Abstention has
+#           to be possible or `answered_rate` measures nothing, but it must not dominate.
+SYSTEM_PROMPTS = {
+    "strict": (
+        "You answer questions about a user's past conversations. "
+        "Answer in as few words as possible. "
+        "If the information needed is not available to you, reply exactly: I don't know."
+    ),
+    "soft": (
+        "You answer questions about a user's past conversations. "
+        "Answer in as few words as possible, using the excerpts provided. "
+        "Only if the excerpts genuinely do not contain the answer, say: I don't know."
+    ),
+    "none": (
+        "You answer questions about a user's past conversations. "
+        "Answer in as few words as possible."
+    ),
+}
+
+DEFAULT_PROMPT_MODE = "soft"
+
+# Retained so existing callers keep working; equal to the soft variant.
+SYSTEM_PROMPT = SYSTEM_PROMPTS[DEFAULT_PROMPT_MODE]
 
 ABSTENTION_STRING = "i don't know"
 
@@ -123,9 +155,15 @@ class Reader:
         revision: str = READER_REVISION,
         device: str = "auto",
         dtype: str = "auto",
+        prompt_mode: str = DEFAULT_PROMPT_MODE,
     ) -> None:
         self.model_name = model
         self.revision = revision
+        if prompt_mode not in SYSTEM_PROMPTS:
+            raise ValueError(
+                f"unknown prompt_mode {prompt_mode!r}; expected one of {list(SYSTEM_PROMPTS)}"
+            )
+        self.prompt_mode = prompt_mode
         self.device = resolve_device(device)
         self.dtype = dtype
         self._model = None
@@ -169,7 +207,7 @@ class Reader:
         else:
             user = f"Question: {question}"
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": SYSTEM_PROMPTS[self.prompt_mode]},
             {"role": "user", "content": user},
         ]
         return tokenizer.apply_chat_template(
@@ -209,6 +247,9 @@ class Reader:
             "reader_model": self.model_name,
             "reader_revision": self.revision,
             "reader_device": self.device,
+            # Recorded because it changed in-context extraction from 38% to 98%. Two rows
+            # with different prompt modes are not comparable.
+            "prompt_mode": self.prompt_mode,
         }
 
 

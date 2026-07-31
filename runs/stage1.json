@@ -1,0 +1,105 @@
+{
+  "retention_floor": 0.5,
+  "ppl_ceiling": 1.5,
+  "n_facts": 20,
+  "epochs": 3,
+  "generated_per_fact": 6,
+  "rows": [
+    {
+      "seed": 0,
+      "hits": 0,
+      "strict_hits": 0,
+      "n_facts": 20,
+      "retention": 0.0,
+      "retention_strict_prompt": 0.0,
+      "ppl_ratio": 0.9858764035025085,
+      "steps": 6,
+      "corpus_size": 20,
+      "cell": "naive (published baseline)"
+    },
+    {
+      "seed": 1,
+      "hits": 0,
+      "strict_hits": 0,
+      "n_facts": 20,
+      "retention": 0.0,
+      "retention_strict_prompt": 0.0,
+      "ppl_ratio": 0.9743004874575995,
+      "steps": 6,
+      "corpus_size": 20,
+      "cell": "naive (published baseline)"
+    },
+    {
+      "seed": 0,
+      "hits": 0,
+      "strict_hits": 0,
+      "n_facts": 20,
+      "retention": 0.0,
+      "retention_strict_prompt": 0.0,
+      "ppl_ratio": 0.9864913009566333,
+      "steps": 6,
+      "corpus_size": 20,
+      "cell": "+hypers"
+    },
+    {
+      "seed": 1,
+      "hits": 0,
+      "strict_hits": 0,
+      "n_facts": 20,
+      "retention": 0.0,
+      "retention_strict_prompt": 0.0,
+      "ppl_ratio": 0.9799412038429106,
+      "steps": 6,
+      "corpus_size": 20,
+      "cell": "+hypers"
+    },
+    {
+      "seed": 0,
+      "hits": 15,
+      "strict_hits": 6,
+      "n_facts": 20,
+      "retention": 0.75,
+      "retention_strict_prompt": 0.3,
+      "ppl_ratio": 286.1751451525863,
+      "steps": 45,
+      "corpus_size": 196,
+      "cell": "+augment"
+    },
+    {
+      "seed": 1,
+      "hits": 15,
+      "strict_hits": 17,
+      "n_facts": 20,
+      "retention": 0.75,
+      "retention_strict_prompt": 0.85,
+      "ppl_ratio": 2.154067917011921,
+      "steps": 45,
+      "corpus_size": 196,
+      "cell": "+augment"
+    },
+    {
+      "seed": 0,
+      "hits": 0,
+      "strict_hits": 0,
+      "n_facts": 20,
+      "retention": 0.0,
+      "retention_strict_prompt": 0.0,
+      "ppl_ratio": 1.01424202257093,
+      "steps": 45,
+      "corpus_size": 196,
+      "cell": "+both (corrected)"
+    },
+    {
+      "seed": 1,
+      "hits": 0,
+      "strict_hits": 0,
+      "n_facts": 20,
+      "retention": 0.0,
+      "retention_strict_prompt": 0.0,
+      "ppl_ratio": 1.0066289444365832,
+      "steps": 45,
+      "corpus_size": 196,
+      "cell": "+both (corrected)"
+    }
+  ]
+}

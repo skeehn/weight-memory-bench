@@ -33,6 +33,7 @@ the naive baseline is not enough, because the naive baseline destroys the model.
 
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 from dataclasses import dataclass, field
 
@@ -52,6 +53,11 @@ class MethodConfig:
     chat_format: bool = False
     kl_weight: float = 0.0  # 0 disables the anchor
     ppl_gate: float | None = None  # stop when held-out ppl exceeds this multiple of baseline
+    # Standard practice, absent from every earlier run and a direct cause of the
+    # divergence measured there. lr 2e-3 with no clipping and no warmup is roughly 10x
+    # the accepted LoRA range with none of the usual stabilisers.
+    grad_clip: float | None = 1.0
+    warmup_frac: float = 0.1
 
     def label(self) -> str:
         parts = []
@@ -241,6 +247,20 @@ class MitigatedMemoryArm:
             [p for p in model.parameters() if p.requires_grad], lr=self.learning_rate
         )
 
+        # Linear warmup then cosine decay. Absent before, which meant every run began at
+        # full learning rate on the very first step -- the point at which the adapter is
+        # random and the gradient is largest.
+        total_steps = max(1, self.epochs * len(sequence))
+        warmup_steps = max(1, int(total_steps * self.config.warmup_frac))
+
+        def lr_at(step: int) -> float:
+            if step < warmup_steps:
+                return step / warmup_steps
+            progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+            return 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_at)
+
         report = IngestReport(steps=0)
         model.train()
         for _ in range(self.epochs):
@@ -265,7 +285,13 @@ class MitigatedMemoryArm:
                     loss = loss + self.config.kl_weight * kl
 
                 loss.backward()
+                if self.config.grad_clip:
+                    torch.nn.utils.clip_grad_norm_(
+                        [p for p in model.parameters() if p.requires_grad],
+                        self.config.grad_clip,
+                    )
                 optimizer.step()
+                scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
                 report.steps += 1
 
