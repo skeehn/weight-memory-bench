@@ -27,8 +27,15 @@ OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/runs/lr_sweep"
 mkdir -p "$OUT_DIR"
 
 SEEDS="${SEEDS:-5}"
-SIZES=(1B 3B 8B)
-LRS=(5e-4 1e-3 2e-3 5e-3)
+# Overridable, because the 1B row came back as a single-point peak -- 0.000 at 1e-3, 0.500
+# at 2e-3, 0.000 at 5e-3. If the usable window is narrower than a factor of two, a grid
+# spaced 2-2.5x apart can step straight over it, and a zero then means "grid missed it"
+# rather than "no setting works". A follow-up pass narrows around wherever fact NLL bottoms
+# out, since NLL keeps moving continuously even where recall is a step function.
+#
+#   SIZES="3B 8B" LRS="1.5e-3 2e-3 2.5e-3 3e-3" ./baseten/run_lr_sweep.sh
+read -r -a SIZES <<< "${SIZES:-1B 3B 8B}"
+read -r -a LRS <<< "${LRS:-5e-4 1e-3 2e-3 5e-3}"
 
 deactivate_deployment() {
     echo
