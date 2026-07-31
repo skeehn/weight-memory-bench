@@ -46,7 +46,7 @@ def _perplexity(reader, text: str) -> float:
 
 def run(
     n_facts: int = 20,
-    threshold: float = 2e-2,
+    threshold: float = 1e-4,
     edit_steps: int = 25,
     edit_lr: float = 0.5,
     device: str = "auto",
@@ -125,6 +125,7 @@ def run(
         "restored_ppl_ratio": restored_ppl / baseline_ppl,
         "n_preserve_texts": len(preserve),
         "null_space_rank": projection.null_space_rank,
+        "token_positions": projection.token_positions,
         "key_dim": projection.key_dim,
         "layers": list(projection.layers),
         "threshold": threshold,
@@ -144,7 +145,7 @@ def run(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--facts", type=int, default=20)
-    parser.add_argument("--threshold", type=float, default=2e-2)
+    parser.add_argument("--threshold", type=float, default=1e-4)
     parser.add_argument("--edit-steps", type=int, default=25)
     parser.add_argument("--edit-lr", type=float, default=0.5)
     parser.add_argument("--device", default="auto")

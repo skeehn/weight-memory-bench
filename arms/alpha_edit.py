@@ -58,6 +58,9 @@ class AlphaEditResult:
     null_space_rank: int = 0
     key_dim: int = 0
     layers: tuple[int, ...] = ()
+    # How many token positions fed the covariance. A rank-8192 covariance needs far more
+    # than 8192 of these; the first run used ~2000 and the estimate was meaningless.
+    token_positions: int = 0
 
 
 class AlphaEditArm:
@@ -147,13 +150,22 @@ class AlphaEditArm:
         model, tokenizer = self.reader._load()
         device = self.reader.device
 
-        captured: list = []
+        # The covariance is accumulated INCREMENTALLY, not by storing activations.
+        # Keeping them would need ~20GB at 2000 samples (2000 x 256 tokens x 8192 dims x
+        # 4 bytes) and OOM immediately -- while the only thing actually needed is the
+        # running sum of x^T x, which is 8192x8192 regardless of how many samples feed it.
+        state = {"cov": None, "count": 0}
 
         def hook(_module, inputs, _output):
-            # inputs[0] is the activation entering down_proj: shape [batch, seq, d_ff]
-            captured.append(inputs[0].detach().reshape(-1, inputs[0].shape[-1]).float().cpu())
+            # inputs[0] is the activation entering down_proj: shape [batch, seq, d_ff].
             # .float() is load-bearing: the covariance and its eigendecomposition are
-            # computed in float32/float64 even when the model runs in bf16.
+            # computed in float32/float64 even when the model runs in bf16, because the
+            # null space is defined by which eigenvalues are SMALL and bf16 has no
+            # precision left there.
+            x = inputs[0].detach().reshape(-1, inputs[0].shape[-1]).float()
+            outer = (x.T @ x).cpu()
+            state["cov"] = outer if state["cov"] is None else state["cov"] + outer
+            state["count"] += x.shape[0]
 
         handle = self._down_proj(layers[0]).register_forward_hook(hook)
         try:
@@ -166,9 +178,10 @@ class AlphaEditArm:
         finally:
             handle.remove()
 
-        keys = torch.cat(captured, dim=0)
+        if state["cov"] is None:
+            raise RuntimeError("no activations captured; the hook never fired")
         # Covariance of the preserved keys. Its principal directions are what must not move.
-        cov = (keys.T @ keys) / max(1, keys.shape[0])
+        cov = state["cov"] / max(1, state["count"])
         eigvals, eigvecs = torch.linalg.eigh(cov.double())
         largest = float(eigvals.max())
         keep = eigvals > (largest * self.null_space_threshold)
@@ -182,6 +195,7 @@ class AlphaEditArm:
             null_space_rank=int(cov.shape[0] - int(keep.sum())),
             key_dim=int(cov.shape[0]),
             layers=tuple(layers),
+            token_positions=state["count"],
         )
 
     # -- editing -----------------------------------------------------------------------
