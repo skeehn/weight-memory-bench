@@ -1,0 +1,242 @@
+{
+  "retention_floor": 0.5,
+  "ppl_ceiling": 1.5,
+  "chat_format": true,
+  "updates": 25,
+  "seeds": 6,
+  "summary": [
+    {
+      "kl_weight": 0.0005,
+      "retention": 0.1388888888888889,
+      "ppl_ratio": 5.033355974281091
+    },
+    {
+      "kl_weight": 0.001,
+      "retention": 0.2222222222222222,
+      "ppl_ratio": 1.6275845322189744
+    },
+    {
+      "kl_weight": 0.002,
+      "retention": 0.08333333333333333,
+      "ppl_ratio": 20.798753116335494
+    }
+  ],
+  "rows": [
+    {
+      "method": "kl0.0005",
+      "config": "chatfmt+kl0.0005",
+      "seed": 0,
+      "retention": 0.0,
+      "heldout_ppl": 54.324180603027344,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.7668696204614944,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.0005",
+      "config": "chatfmt+kl0.0005",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 60.44219207763672,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.9658552009549024,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.0005",
+      "config": "chatfmt+kl0.0005",
+      "seed": 2,
+      "retention": 0.16666666666666666,
+      "heldout_ppl": 136.10769653320312,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 4.426841812356895,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.0005",
+      "config": "chatfmt+kl0.0005",
+      "seed": 3,
+      "retention": 0.16666666666666666,
+      "heldout_ppl": 55.38965606689453,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.8015237322687352,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.0005",
+      "config": "chatfmt+kl0.0005",
+      "seed": 4,
+      "retention": 0.3333333333333333,
+      "heldout_ppl": 330.07794189453125,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 10.735637085438178,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.0005",
+      "config": "chatfmt+kl0.0005",
+      "seed": 5,
+      "retention": 0.16666666666666666,
+      "heldout_ppl": 292.19183349609375,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 9.50340839420634,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.001",
+      "config": "chatfmt+kl0.001",
+      "seed": 0,
+      "retention": 0.16666666666666666,
+      "heldout_ppl": 47.604984283447266,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.5483307723979283,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.001",
+      "config": "chatfmt+kl0.001",
+      "seed": 1,
+      "retention": 0.3333333333333333,
+      "heldout_ppl": 43.18631362915039,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.4046154902668841,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.001",
+      "config": "chatfmt+kl0.001",
+      "seed": 2,
+      "retention": 0.3333333333333333,
+      "heldout_ppl": 59.13426971435547,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.9233156124337079,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.001",
+      "config": "chatfmt+kl0.001",
+      "seed": 3,
+      "retention": 0.0,
+      "heldout_ppl": 39.67805099487305,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.2905108208490188,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.001",
+      "config": "chatfmt+kl0.001",
+      "seed": 4,
+      "retention": 0.0,
+      "heldout_ppl": 50.04188537597656,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.6275898879642199,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.001",
+      "config": "chatfmt+kl0.001",
+      "seed": 5,
+      "retention": 0.5,
+      "heldout_ppl": 60.604820251464844,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.9711446094020872,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.002",
+      "config": "chatfmt+kl0.002",
+      "seed": 0,
+      "retention": 0.0,
+      "heldout_ppl": 47.493247985839844,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.5446965994098796,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.002",
+      "config": "chatfmt+kl0.002",
+      "seed": 1,
+      "retention": 0.0,
+      "heldout_ppl": 53.504966735839844,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.7402250566866344,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.002",
+      "config": "chatfmt+kl0.002",
+      "seed": 2,
+      "retention": 0.3333333333333333,
+      "heldout_ppl": 53.7480583190918,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.7481315014534025,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.002",
+      "config": "chatfmt+kl0.002",
+      "seed": 3,
+      "retention": 0.0,
+      "heldout_ppl": 50.33142852783203,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.6370071491754747,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.002",
+      "config": "chatfmt+kl0.002",
+      "seed": 4,
+      "retention": 0.0,
+      "heldout_ppl": 44.2203483581543,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 1.4382470062676487,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    },
+    {
+      "method": "kl0.002",
+      "config": "chatfmt+kl0.002",
+      "seed": 5,
+      "retention": 0.16666666666666666,
+      "heldout_ppl": 3587.5732421875,
+      "baseline_ppl": 30.746004104614258,
+      "ppl_ratio": 116.68421138501992,
+      "steps": 25,
+      "stopped_early": false,
+      "stop_reason": ""
+    }
+  ]
+}

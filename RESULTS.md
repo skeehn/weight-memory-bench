@@ -324,6 +324,64 @@ model at 1.80x, and still retained zero. Full training budget, model intact, not
 
 ---
 
+## 2.7 Can it be fixed? A KL sweep, and the answer
+
+`kl_weight` was swept 0 to 0.5, then finer between 0 and 0.005 where the entire regime
+change happens, then confirmed at 6 seeds on the three most promising weights. Chat-format
+held on throughout, since it cut per-step damage ~114x for free.
+
+**Confirmation run, 6 seeds, 36 probe-trials per weight:**
+
+| kl_weight | retention | hits/36 | 95% CI | diverged |
+|---|---|---|---|---|
+| 0.0005 | 0.139 | 5/36 | [0.061, 0.287] | 1/6 |
+| **0.001** | **0.222** | **8/36** | [0.117, 0.381] | **0/6** |
+| 0.002 | 0.083 | 3/36 | [0.029, 0.218] | 1/6 |
+
+kl=0.001 is best on every axis — highest retention, lowest perplexity (1.63x), the only
+weight with zero divergences. **And none of the differences are significant**: all three
+intervals overlap. That is the honest limit of 36 trials.
+
+### The distance travelled, and the distance remaining
+
+| | Retention | Held-out ppl |
+|---|---|---|
+| Naive | 0.083 | 20,371x |
+| Best found (kl=0.001 + chat-format) | 0.222 | 1.63x |
+
+**~2.7x the retention at ~12,000x less damage.** The model goes from destroyed and
+remembering nothing to intact and remembering about a fifth. That is real progress on the
+problem.
+
+It still fails the pre-registered bar, and badly on the axis that matters: 0.222 against a
+0.50 floor. A memory system that recalls one fact in five is not a memory system.
+
+### ⚠️ The process is bimodal, so every mean in this document understates the problem
+
+At kl=0.003, one seed diverged to **259.96x** and the other sat at **1.34x** — a 194-fold
+gap inside a single configuration. The process does not degrade smoothly; it either blows
+up or it does not, and the seed decides which.
+
+Every mean reported across the method comparison and the coarse sweep is therefore an
+average of divergences and non-divergences, describing neither. `kl_sweep.py` now prints
+per-seed values and a divergence count so this cannot hide behind an average again. The
+method-comparison table (§2.6) predates that fix and should be read with it in mind.
+
+**This was caught three times only by the next data point, never by applying the intervals
+already in the repo.** 2/12 was called a "strict improvement"; 2/12 and 3/12 together were
+called "a coherent pattern"; the damage axis was called "real and consistent" one message
+before a 100x spike appeared in it. The discipline existed in code and kept failing at the
+moment of interpretation.
+
+### Still open
+
+- **8B.** It showed the lowest fact-NLL of any configuration measured (§2). The separability
+  absent at 1B may exist at scale.
+- **MEMIT-style targeted editing.** The only approach that does not gradient-descend the
+  whole adapter, and the one designed specifically for this failure. Not implemented.
+
+---
+
 ## 3. What the harness caught before any money was spent
 
 Every one of these produced output that looked completely normal.
