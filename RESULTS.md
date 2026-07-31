@@ -83,17 +83,56 @@ itself, at the smallest scale it could possibly appear.
 larger than most differences worth measuring. A single unseeded run is a draw from a wide
 distribution, not a result.
 
-### ⚠️ The scaling shape is not yet a claim
+### The per-rung learning-rate sweep
 
-Learning rate was held at 2e-3 across all three sizes. A rank-16 adapter is a
-proportionally much larger perturbation on a 1B model than on an 8B one, so identical
-hyperparameters are a far larger *effective* step at the small end. This measures recall at
-a fixed step size, not recall at scale.
+The first scaling run held lr at 2e-3 across all sizes, which confounds scale with
+effective step size: a rank-16 adapter perturbs a 1B model far more than an 8B one. So
+every size was re-run across four learning rates, 5 seeds each.
 
-The honest statement today is: **at fixed hyperparameters, recall falls with model size.**
-Turning that into a statement about scale requires tuning the learning rate per rung and
-comparing each size's best. Until then the ordering above should not be read as a scaling
-law.
+```
+        5e-4    1e-3    2e-3    5e-3
+1B     0.000   0.000   0.500   0.000
+3B     0.000   0.000   0.057   0.000
+8B     0.100   0.200   0.300   0.000
+```
+
+**All three sizes peak at the same learning rate**, so the confound was real in principle
+and absent in fact — the original comparison was valid as run. That is worth stating
+plainly rather than quietly dropping, because the reasoning that motivated this run was
+sound and the conclusion it predicted was wrong.
+
+On the 5 probes valid at every size: **1B 0.400, 8B 0.280, 3B 0.080.** Non-monotonic after
+per-rung tuning, so: report the grid, not a trend. (That threshold was fixed in
+`summarize_lr_sweep.py` before the data arrived.)
+
+**The usable window is narrower than a factor of two.** 1B is 0.000 at 1e-3, 0.500 at
+2e-3, 0.000 at 5e-3. A mechanism that only works inside a sub-2x learning-rate band is
+impractical on its own terms, independent of its peak accuracy: there is no gradient to
+tune along, because everything outside the band reads as an identical zero.
+
+**Scale improves writing, not reading.** 8B reaches the lowest fact NLL of any
+configuration measured (4.75 at lr=1e-3, against 1B's best of 7.00) while recalling less
+(0.300 vs 0.500). The bigger model stores the fact *better* and retrieves it *worse*. The
+write path works and scales; the read path is what is missing.
+
+### ⚠️ Error bars here understate the true variance
+
+Reported standard deviations measure variance across seeds. There is additional variance
+*within* a seed that this protocol does not capture.
+
+Evidence: 3B at lr=2e-3 returned 0.114 on one run and 0.057 on another, same rank, same
+learning rate, same epochs, same five seeds. The valid probe set was **identical**, and the
+entire difference was one probe ("Where do I work?") going from 2 hits to 0. Meanwhile 1B
+reproduced to three decimals across the same pair of runs.
+
+`torch.manual_seed` fixes LoRA initialization but not GPU kernel non-determinism — larger
+models dispatch to different kernels, and cuBLAS reductions are not deterministic by
+default. Runs in this document predate the fix (`use_deterministic_algorithms`,
+`CUBLAS_WORKSPACE_CONFIG`), now in `arms/weight_memory.py`.
+
+Consequence: **3B's 0.057 is not distinguishable from zero, or from 0.114.** The 1B-vs-3B
+and 8B-vs-3B gaps (5x-9x) are large enough to survive this, but no difference of ~0.06 in
+these tables should be read as real.
 
 ---
 
