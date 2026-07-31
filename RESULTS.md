@@ -7,6 +7,37 @@
 
 ---
 
+## -2. AlphaEdit: attempted, NOT evaluated
+
+Three GPU runs, three bugs of mine, and **zero information about whether the method works**.
+Recorded so the numbers are not mistaken for a result about AlphaEdit.
+
+| run | retention | ppl | cause |
+|---|---|---|---|
+| 1 | 0.150 | 123,489x | bf16/float32 dtype error, then a null space of 8010/8192 |
+| 2 | — | — | same, unfixed |
+| 3 | 0.100 | 14,845x | preserve corpus never loaded; diagnostic was a constant |
+
+**The diagnostic was hardcoded.** `EditReport(projected_norm=raw_norm)` sets it to the same
+variable as `delta_norm`, so `null_space_retention` computes `x/x = 1.0` unconditionally. I
+cited "survived projection 1.000" as evidence the projection did nothing. It was never a
+measurement, and the interpretation of run 1 that rested on it is void.
+
+**The preserve corpus never loaded.** Run 3 reports `n_preserve_texts: 8` and
+`token_positions: 346` despite a fix intended to supply thousands of LongMemEval turns. The
+loader sits inside a bare `try/except: pass`, which turned a loud failure into a silent one.
+346 token positions cannot estimate an 8192x8192 covariance, so the null space was again
+sampling noise and the "constrained" edit ran unconstrained.
+
+That `except: pass` is the root cause of run 3 and is the same failure shape as most of this
+document: instrumentation that concealed a problem instead of surfacing it.
+
+**What did work:** `restored_ppl_ratio` came back 1.000x on every run, so the edit was fully
+contained in the tracked layers. The plumbing is sound. Nothing else here is evidence about
+anything.
+
+---
+
 ## -1. Weight memory works: 1.00 retention
 
 Llama-3.2-1B, LoRA rank 16, 20 invented facts, **answered with an empty context window**.

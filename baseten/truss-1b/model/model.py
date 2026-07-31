@@ -124,7 +124,7 @@ class Model:
             try:
                 result = alphaedit_run(
                     n_facts=int(request.get("facts", 20)),
-                    threshold=float(request.get("threshold", 2e-2)),
+                    threshold=float(request.get("threshold", 1e-4)),
                     edit_steps=int(request.get("edit_steps", 25)),
                     edit_lr=float(request.get("edit_lr", 0.5)),
                 )

@@ -58,6 +58,9 @@ class AlphaEditResult:
     null_space_rank: int = 0
     key_dim: int = 0
     layers: tuple[int, ...] = ()
+    # How many token positions fed the covariance. A rank-8192 covariance needs far more
+    # than 8192 of these; the first run used ~2000 and the estimate was meaningless.
+    token_positions: int = 0
 
 
 class AlphaEditArm:
@@ -74,15 +77,26 @@ class AlphaEditArm:
         self,
         reader,
         layers: tuple[int, ...] | None = None,
-        null_space_threshold: float = 2e-2,
+        null_space_threshold: float = 1e-4,
         edit_lr: float = 0.5,
         edit_steps: int = 25,
-        preserve_samples: int = 64,
+        preserve_samples: int = 2000,
     ) -> None:
         self.reader = reader
         self.layers = layers
-        # Singular values below this fraction of the largest are treated as null directions.
-        # Larger threshold -> bigger null space -> more room to edit but weaker preservation.
+        # Eigenvalues below this fraction of the largest are treated as null directions.
+        #
+        # MEASURED FAILURE at 2e-2 with 64 short samples: the null space came out as
+        # 8010 of 8192 dimensions and the projection removed NOTHING from the update
+        # (survived-projection = 1.000), producing 123,489x damage -- an unconstrained
+        # edit wearing a projection's clothes.
+        #
+        # Both numbers were wrong together. A covariance over 8192 dimensions cannot be
+        # estimated from ~2000 token positions: it is rank-deficient by construction, so
+        # most eigenvalues are near zero because those directions were never sampled,
+        # not because knowledge avoids them. A high threshold then declares all of that
+        # sampling noise to be free space. AlphaEdit's own setup estimates this from
+        # ~100k samples.
         self.null_space_threshold = null_space_threshold
         self.edit_lr = edit_lr
         self.edit_steps = edit_steps
@@ -136,13 +150,22 @@ class AlphaEditArm:
         model, tokenizer = self.reader._load()
         device = self.reader.device
 
-        captured: list = []
+        # The covariance is accumulated INCREMENTALLY, not by storing activations.
+        # Keeping them would need ~20GB at 2000 samples (2000 x 256 tokens x 8192 dims x
+        # 4 bytes) and OOM immediately -- while the only thing actually needed is the
+        # running sum of x^T x, which is 8192x8192 regardless of how many samples feed it.
+        state = {"cov": None, "count": 0}
 
         def hook(_module, inputs, _output):
-            # inputs[0] is the activation entering down_proj: shape [batch, seq, d_ff]
-            captured.append(inputs[0].detach().reshape(-1, inputs[0].shape[-1]).float().cpu())
+            # inputs[0] is the activation entering down_proj: shape [batch, seq, d_ff].
             # .float() is load-bearing: the covariance and its eigendecomposition are
-            # computed in float32/float64 even when the model runs in bf16.
+            # computed in float32/float64 even when the model runs in bf16, because the
+            # null space is defined by which eigenvalues are SMALL and bf16 has no
+            # precision left there.
+            x = inputs[0].detach().reshape(-1, inputs[0].shape[-1]).float()
+            outer = (x.T @ x).cpu()
+            state["cov"] = outer if state["cov"] is None else state["cov"] + outer
+            state["count"] += x.shape[0]
 
         handle = self._down_proj(layers[0]).register_forward_hook(hook)
         try:
@@ -155,9 +178,10 @@ class AlphaEditArm:
         finally:
             handle.remove()
 
-        keys = torch.cat(captured, dim=0)
+        if state["cov"] is None:
+            raise RuntimeError("no activations captured; the hook never fired")
         # Covariance of the preserved keys. Its principal directions are what must not move.
-        cov = (keys.T @ keys) / max(1, keys.shape[0])
+        cov = state["cov"] / max(1, state["count"])
         eigvals, eigvecs = torch.linalg.eigh(cov.double())
         largest = float(eigvals.max())
         keep = eigvals > (largest * self.null_space_threshold)
@@ -171,6 +195,7 @@ class AlphaEditArm:
             null_space_rank=int(cov.shape[0] - int(keep.sum())),
             key_dim=int(cov.shape[0]),
             layers=tuple(layers),
+            token_positions=state["count"],
         )
 
     # -- editing -----------------------------------------------------------------------

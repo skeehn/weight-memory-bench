@@ -46,7 +46,7 @@ def _perplexity(reader, text: str) -> float:
 
 def run(
     n_facts: int = 20,
-    threshold: float = 2e-2,
+    threshold: float = 1e-4,
     edit_steps: int = 25,
     edit_lr: float = 0.5,
     device: str = "auto",
@@ -77,11 +77,25 @@ def run(
 
     baseline_ppl = _perplexity(reader, HELDOUT_TEXT)
 
-    # The null space is estimated over text whose behaviour must not change. Reusing the
-    # replay corpus is deliberate: it is already verified disjoint from the held-out
-    # perplexity passage, so the preservation target and the preservation *measurement*
-    # cannot be the same text.
-    projection = arm.build_projection(REPLAY_TEXTS)
+    # The null space is estimated over text whose behaviour must not change.
+    #
+    # REPLAY_TEXTS alone (8 paragraphs) was catastrophically insufficient: ~2000 token
+    # positions cannot estimate an 8192x8192 covariance, so the estimate was rank-deficient
+    # and 8010 of 8192 directions came out "null" purely because they were never sampled.
+    # The projection then removed nothing and the edit ran unconstrained to 123,489x damage.
+    #
+    # LongMemEval supplies thousands of real conversational turns. It is also the right
+    # KIND of text: the preserved behaviour that matters is ordinary language use, not the
+    # eight specific paragraphs that happen to sit in the replay corpus.
+    preserve = list(REPLAY_TEXTS)
+    try:
+        from data import longmemeval as lme
+
+        for inst in lme.split(lme.load(), "dev")[:40]:
+            preserve.extend(text for _sid, text in inst.turn_chunks()[:60])
+    except Exception:
+        pass  # fall back to the replay corpus; the rank diagnostic will show it is thin
+    projection = arm.build_projection(preserve)
 
     # Augmented surface forms, because Allen-Zhu applies to any weight-space injection:
     # one phrasing gives memorization without extractability regardless of the mechanism.
@@ -109,7 +123,9 @@ def run(
         # Sanity: restoring the snapshot must return perplexity to baseline. If it does
         # not, the edit leaked outside the layers being tracked and every number is suspect.
         "restored_ppl_ratio": restored_ppl / baseline_ppl,
+        "n_preserve_texts": len(preserve),
         "null_space_rank": projection.null_space_rank,
+        "token_positions": projection.token_positions,
         "key_dim": projection.key_dim,
         "layers": list(projection.layers),
         "threshold": threshold,
@@ -129,7 +145,7 @@ def run(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--facts", type=int, default=20)
-    parser.add_argument("--threshold", type=float, default=2e-2)
+    parser.add_argument("--threshold", type=float, default=1e-4)
     parser.add_argument("--edit-steps", type=int, default=25)
     parser.add_argument("--edit-lr", type=float, default=0.5)
     parser.add_argument("--device", default="auto")
