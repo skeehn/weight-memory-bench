@@ -79,9 +79,25 @@ class WeightMemoryArm:
             # "works perfectly" was pure initialization luck. Any single unseeded run is a
             # draw from a distribution, not a result.
             if self.seed is not None:
+                import os
+
                 import torch
 
                 torch.manual_seed(self.seed)
+                # Seeding the initialization is NOT sufficient on GPU. Measured: 1B
+                # reproduced to three decimals across runs, 3B did not -- the same config
+                # and the same seeds gave 0.114 then 0.057, and the probe set was
+                # identical, so the whole difference was one probe flipping. Larger models
+                # dispatch to different kernels, and non-deterministic reductions in cuBLAS
+                # make "seeded" a claim the numbers do not support.
+                #
+                # The cost is speed. The alternative is error bars that understate the
+                # true variance, which is worse than a slower run.
+                os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+                try:
+                    torch.use_deterministic_algorithms(True, warn_only=True)
+                except Exception:
+                    pass
 
             base = self.reader.model
             config = LoraConfig(

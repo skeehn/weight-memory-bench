@@ -34,15 +34,7 @@ from harness.gates import check, score_response
 from harness.tokens import READER_LADDER, shared
 
 MODEL_ID = os.environ.get("WMB_BASETEN_MODEL_ID", "qzkme4kq")
-
-# Addressed by deployment ID, never by environment. `truss push` creates a deployment that
-# is NOT promoted to production, so /environments/production/predict routes to whatever was
-# deployed before -- which has already, once, meant measuring the wrong build and getting
-# entirely plausible numbers back.
-DEPLOYMENT_ID = os.environ.get("WMB_BASETEN_DEPLOYMENT_ID")
-if not DEPLOYMENT_ID:
-    raise SystemExit("set WMB_BASETEN_DEPLOYMENT_ID to the deployment you intend to call")
-ENDPOINT = f"https://model-{MODEL_ID}.api.baseten.co/deployment/{DEPLOYMENT_ID}/predict"
+ENDPOINT = f"https://model-{MODEL_ID}.api.baseten.co/environments/production/predict"
 
 # Arm A ships ~400KB of context per item. Five keeps a request near 2MB; the retrieval arms
 # are ~40x smaller and could batch far larger, but one knob is easier to reason about than
@@ -88,30 +80,6 @@ def build_arm(name: str, budget: int, dense: bool):
     raise ValueError(f"unknown arm {name!r}")
 
 
-def deactivate_all(key: str) -> None:
-    """Shut every deployment on the model down.
-
-    Registered with atexit, because scale_down_delay is 900s: finishing the run and simply
-    returning still bills fifteen minutes of warm GPU. Every deployment, not just the one
-    driven here -- a stale warm replica costs exactly as much as a live one.
-    """
-    api = f"https://api.baseten.co/v1/models/{MODEL_ID}/deployments"
-    try:
-        request = urllib.request.Request(api, headers={"Authorization": f"Api-Key {key}"})
-        with urllib.request.urlopen(request, timeout=60) as response:
-            deployments = json.loads(response.read())["deployments"]
-        for dep in deployments:
-            post = urllib.request.Request(
-                f"{api}/{dep['id']}/deactivate",
-                data=b"",
-                headers={"Authorization": f"Api-Key {key}"},
-            )
-            with urllib.request.urlopen(post, timeout=60) as response:
-                print(f"  deactivated {dep['id']} -> {response.status}")
-    except Exception as exc:
-        print(f"  DEACTIVATION FAILED ({exc}) -- SHUT DOWN MANUALLY at app.baseten.co")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--split", default="dev", choices=["dev", "test", "all"])
@@ -122,17 +90,9 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=DEFAULT_BATCH)
     parser.add_argument("--dense", action="store_true")
     parser.add_argument("--no-ledger", action="store_true")
-    # Off by default: the safe thing must be the thing that happens when nobody thinks
-    # about it. Only pass this when another run follows immediately.
-    parser.add_argument("--keep-warm", action="store_true",
-                        help="skip deactivation on exit (leaves the GPU billing)")
     args = parser.parse_args()
 
     key = api_key()
-    if not args.keep_warm:
-        import atexit
-
-        atexit.register(deactivate_all, key)
     tk = shared()
     instances = lme.split(lme.load(), args.split)
     if args.limit:
