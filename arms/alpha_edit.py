@@ -141,6 +141,8 @@ class AlphaEditArm:
         def hook(_module, inputs, _output):
             # inputs[0] is the activation entering down_proj: shape [batch, seq, d_ff]
             captured.append(inputs[0].detach().reshape(-1, inputs[0].shape[-1]).float().cpu())
+            # .float() is load-bearing: the covariance and its eigendecomposition are
+            # computed in float32/float64 even when the model runs in bf16.
 
         handle = self._down_proj(layers[0]).register_forward_hook(hook)
         try:
@@ -231,13 +233,19 @@ class AlphaEditArm:
                     before = float(loss)
 
                 grad = torch.autograd.grad(loss, module.weight, retain_graph=False)[0]
-                delta.grad = grad
+                delta.grad = grad.to(delta.dtype)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
                 # Project after EVERY step. The constraint is maintained, not applied once.
+                #
+                # The projection is kept in float32 while the weights are bf16. Computing
+                # the eigendecomposition in bf16 would be numerically hopeless -- the null
+                # space is defined by which singular values are *small*, exactly where bf16
+                # has no precision left. So the cast happens here, per step, rather than by
+                # degrading the projection itself.
                 with torch.no_grad():
-                    delta.copy_(delta @ self._projection.T)
+                    delta.copy_((delta.float() @ self._projection.T).to(delta.dtype))
 
             raw_norm = float(torch.linalg.norm(delta.detach()))
             with torch.no_grad():
