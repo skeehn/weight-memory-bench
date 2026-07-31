@@ -22,8 +22,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import ssl
 import time
+import urllib.error
 import urllib.request
+from pathlib import Path
 
 from arms.full_context import FullContextArm
 from arms.grep import GrepArm
@@ -49,6 +52,10 @@ ENDPOINT = f"https://model-{MODEL_ID}.api.baseten.co/deployment/{DEPLOYMENT_ID}/
 # three and the request overhead is not the bottleneck.
 DEFAULT_BATCH = 5
 
+# Answers survive a crash here. Only GPU time costs money; recomputing it does not.
+CACHE_DIR = Path(__file__).resolve().parent.parent / "runs" / "answers"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def api_key() -> str:
     key = os.environ.get("BASETEN_API_KEY")
@@ -62,15 +69,37 @@ def api_key() -> str:
     raise RuntimeError("no Baseten API key found")
 
 
-def remote_generate(items: list[dict], size: str, key: str, timeout: int = 1800) -> list[dict]:
+def remote_generate(
+    items: list[dict], size: str, key: str, timeout: int = 1800, attempts: int = 4
+) -> list[dict]:
+    """Send one batch, retrying transient network failures.
+
+    A single `SSLV3_ALERT_BAD_RECORD_MAC` on a 2MB POST killed a run ten instances in and
+    discarded the GPU time already paid for. Transport failures on multi-megabyte requests
+    are ordinary, not exceptional, and a benchmark driver that treats them as fatal will
+    keep losing paid work at random points.
+
+    Only transport errors are retried. An HTTP error from the server is a real answer about
+    a real problem and retrying it just pays twice for the same failure.
+    """
     payload = json.dumps({"action": "generate", "size": size, "items": items}).encode()
-    request = urllib.request.Request(
-        ENDPOINT,
-        data=payload,
-        headers={"Authorization": f"Api-Key {key}", "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read())["results"]
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            request = urllib.request.Request(
+                ENDPOINT,
+                data=payload,
+                headers={"Authorization": f"Api-Key {key}", "Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read())["results"]
+        except (ssl.SSLError, urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            last = exc
+            if attempt < attempts - 1:
+                delay = 2**attempt
+                print(f"\n  transport error ({type(exc).__name__}), retry in {delay}s")
+                time.sleep(delay)
+    raise RuntimeError(f"batch failed after {attempts} attempts: {last}")
 
 
 def build_arm(name: str, budget: int, dense: bool):
@@ -100,7 +129,19 @@ def deactivate_all(key: str) -> None:
         request = urllib.request.Request(api, headers={"Authorization": f"Api-Key {key}"})
         with urllib.request.urlopen(request, timeout=60) as response:
             deployments = json.loads(response.read())["deployments"]
-        for dep in deployments:
+    except Exception as exc:
+        print(f"  COULD NOT LIST DEPLOYMENTS ({exc}) -- SHUT DOWN MANUALLY at app.baseten.co")
+        return
+
+    still_billing = []
+    for dep in deployments:
+        # Already-inactive deployments return HTTP 400. Skipping them is not cosmetic:
+        # previously the first 400 aborted the loop and printed "SHUT DOWN MANUALLY" even
+        # though every replica was already off. A teardown that cries wolf stops being
+        # believed, which is worse than not having one.
+        if dep.get("active_replica_count", 0) == 0 and dep.get("status") == "INACTIVE":
+            continue
+        try:
             post = urllib.request.Request(
                 f"{api}/{dep['id']}/deactivate",
                 data=b"",
@@ -108,8 +149,13 @@ def deactivate_all(key: str) -> None:
             )
             with urllib.request.urlopen(post, timeout=60) as response:
                 print(f"  deactivated {dep['id']} -> {response.status}")
-    except Exception as exc:
-        print(f"  DEACTIVATION FAILED ({exc}) -- SHUT DOWN MANUALLY at app.baseten.co")
+        except Exception as exc:
+            # One failure must not stop the others: every deployment left warm bills.
+            print(f"  could not deactivate {dep['id']}: {exc}")
+            still_billing.append(dep["id"])
+
+    if still_billing:
+        print(f"  STILL BILLING: {', '.join(still_billing)} -- shut down at app.baseten.co")
 
 
 def main() -> None:
@@ -122,6 +168,8 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=DEFAULT_BATCH)
     parser.add_argument("--dense", action="store_true")
     parser.add_argument("--no-ledger", action="store_true")
+    parser.add_argument("--fresh", action="store_true",
+                        help="ignore cached answers and re-run every instance")
     # Off by default: the safe thing must be the thing that happens when nobody thinks
     # about it. Only pass this when another run follows immediately.
     parser.add_argument("--keep-warm", action="store_true",
@@ -157,9 +205,18 @@ def main() -> None:
         median_tokens = sorted(s.tokens for _, s in prepared)[len(prepared) // 2]
         print(f"{arm_name}: selected in {select_s:.0f}s, median {median_tokens:,} tokens")
 
+        # Answers are cached to disk per batch and reloaded on start. GPU time is the only
+        # thing here that costs money, so a crash at instance 90 must not re-buy the first
+        # 89 -- which is exactly what happened when a transport error killed a run.
+        cache_path = CACHE_DIR / f"{args.split}_{args.size}_{arm_name}_{corpus}.json"
         answers: dict[str, str] = {}
-        for i in range(0, len(prepared), args.batch):
-            chunk = prepared[i : i + args.batch]
+        if cache_path.exists() and not args.fresh:
+            answers = json.loads(cache_path.read_text())
+            print(f"  resuming with {len(answers)} cached answers")
+
+        todo = [(inst, sel) for inst, sel in prepared if inst.question_id not in answers]
+        for i in range(0, len(todo), args.batch):
+            chunk = todo[i : i + args.batch]
             items = [
                 {"id": inst.question_id, "context": sel.text, "question": inst.question}
                 for inst, sel in chunk
@@ -168,7 +225,8 @@ def main() -> None:
                 answers[row["id"]] = row.get("text", "") if "error" not in row else ""
                 if "error" in row:
                     print(f"  {row['id']}: {row['error'][:100]}")
-            print(f"  {min(i + args.batch, len(prepared))}/{len(prepared)}", end="\r")
+            cache_path.write_text(json.dumps(answers))
+            print(f"  {min(i + args.batch, len(todo))}/{len(todo)}", end="\r")
 
         probes = [
             score_response(
