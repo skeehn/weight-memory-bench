@@ -74,15 +74,26 @@ class AlphaEditArm:
         self,
         reader,
         layers: tuple[int, ...] | None = None,
-        null_space_threshold: float = 2e-2,
+        null_space_threshold: float = 1e-4,
         edit_lr: float = 0.5,
         edit_steps: int = 25,
-        preserve_samples: int = 64,
+        preserve_samples: int = 2000,
     ) -> None:
         self.reader = reader
         self.layers = layers
-        # Singular values below this fraction of the largest are treated as null directions.
-        # Larger threshold -> bigger null space -> more room to edit but weaker preservation.
+        # Eigenvalues below this fraction of the largest are treated as null directions.
+        #
+        # MEASURED FAILURE at 2e-2 with 64 short samples: the null space came out as
+        # 8010 of 8192 dimensions and the projection removed NOTHING from the update
+        # (survived-projection = 1.000), producing 123,489x damage -- an unconstrained
+        # edit wearing a projection's clothes.
+        #
+        # Both numbers were wrong together. A covariance over 8192 dimensions cannot be
+        # estimated from ~2000 token positions: it is rank-deficient by construction, so
+        # most eigenvalues are near zero because those directions were never sampled,
+        # not because knowledge avoids them. A high threshold then declares all of that
+        # sampling noise to be free space. AlphaEdit's own setup estimates this from
+        # ~100k samples.
         self.null_space_threshold = null_space_threshold
         self.edit_lr = edit_lr
         self.edit_steps = edit_steps
