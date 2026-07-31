@@ -1,134 +1,175 @@
 # weight-memory-bench
 
-Measuring memory that lives in **weights** against memory that lives in a **vector store**, on
-the two axes that decide whether the trade is worth making: token cost and forgetting.
+Should AI memory live in **weights** or in a **vector store**? This measures both, on the
+two axes the answer turns on: what it costs, and what it destroys.
 
-Status: **arms A-C measured, arm D characterized at 1B, scaling curve in progress.**
+Every number below was produced by this repo and is in `runs/ledger.jsonl` with provenance
+attached. Total GPU spend: **under $2**.
 
-## What is measured so far
+---
 
-Selection cost and evidence recall on the LongMemEval dev split (n=100, 94 answerable).
-Evidence recall asks whether the arm retrieved the turn containing the answer at all -- it
-is a *ceiling*, not an accuracy, since the reader still has to use what it is handed.
+## The four findings
 
-| Arm | Context tokens (median) | Evidence recall |
+### 1. Retrieval already wins the token argument
+
+LongMemEval-S dev, n=100. *Evidence recall* asks whether the arm retrieved the turn
+containing the answer at all.
+
+| Arm | Context tokens | Evidence recall |
 |---|---|---|
-| A. Full context | 105,708 | 1.000 (94/94) |
-| B. Grep | 4,075 | 0.809 (76/94) |
-| C. RAG (BM25+dense+RRF) | 4,061 | 0.968 (91/94) |
-| D. Weight memory | **0** | see below |
+| Full context | 105,708 | 1.000 |
+| Grep | 4,075 | 0.809 |
+| RAG (BM25+dense+RRF) | 4,061 | **0.968** |
+| Weight memory | **0** | see 3 & 4 |
 
-**The headline is not the one the plan predicted.** Good retrieval already reaches the
-ceiling's evidence recall at 1/26th the tokens. The expensive arm buys nothing a
-well-built retriever does not already get, so weight memory is not competing against a
-costly strawman -- it is competing against a baseline that is already cheap and already
-at the ceiling.
+A competent retriever reaches 96.8% of the ceiling at **1/26th the tokens**. The premise
+this project was built on — that retrieval is expensive and weight memory is cheap — is
+wrong. Weight memory is not competing against an expensive strawman. It is competing
+against something already cheap and already near the ceiling.
 
-**Arm D at 1B does not work.** On the easiest case constructible -- 16 short episodes,
-facts stated plainly, invented proper nouns so nothing can leak from pretraining -- online
-LoRA over the raw transcript recalls **33% of facts, with the random seed alone moving
-that between 17% and 50%** (5 seeds, 6 valid probes).
+### 2. The reader is the bottleneck, not retrieval
 
-Three observations behind that number:
+| Arm | answered | acc \| answered | **acc over all** |
+|---|---|---|---|
+| Full context | 0.740 | 0.216 | **0.160** |
+| Grep | 0.200 | 0.200 | **0.040** |
+| RAG | 0.230 | 0.174 | **0.040** |
 
-- **Writing in and reading back are different problems.** Fact NLL drops sharply after
-  ingestion, so the fact demonstrably enters the weights. Recall stays at a third. It is
-  stored as text without being retrievable as an answer.
-- **More training is actively harmful past a narrow window.** At lr=2e-3, ten epochs helps;
-  fifty drives the model *worse than untrained* on the very fact it just trained on.
-- **More capacity does not help.** Rank 16 to 64 to 256 degrades monotonically.
+**Full context has the evidence 100% of the time and answers 16% correctly.** No retrieval
+improvement can move a number capped that far below its own ceiling. Grep and RAG score
+*identically* despite 53 of 100 answers differing and a 16-point evidence-recall gap — the
+reader is too weak for retrieval quality to propagate into accuracy at all.
 
-Whether this is a property of the mechanism or of the model size is what the scaling curve
-(1B / 3B / 8B, identical protocol and seeds, same hardware) is being run to answer.
+Full context also costs **20 seconds per query** against grep's 0.7s. It loses on tokens, on
+latency, and beats baselines that are themselves near the floor.
 
-## The question
+### 3. Scale improves *writing* memory, not *reading* it
 
-Retrieval pays context tokens on every turn, forever. Weight memory pays a one-time update and
-then answers with a near-empty context window. If that trade works, the token cost of memory
-collapses. If it does not, it fails in a specific and measurable way: the model either does not
-retain what you wrote into it, or it retains it and quietly loses something else.
+Per-rung learning-rate sweep, mean fact recall over 5 seeds:
 
-Almost nobody publishes both halves. This measures both.
+```
+        5e-4    1e-3    2e-3    5e-3
+1B     0.000   0.000   0.500   0.000
+3B     0.000   0.000   0.057   0.000
+8B     0.100   0.200   0.300   0.000
+```
 
-## Four arms, one reader
+8B reaches the **lowest fact NLL of any configuration measured** (4.75, against 1B's best of
+7.00) while recalling *less* (0.300 vs 0.500). The bigger model stores the fact better and
+retrieves it worse. The write path works and scales; the read path is what is missing.
 
-The reader model is **identical across all four arms**. Only the memory mechanism differs. That
-is what makes it a controlled comparison rather than a demo.
+The usable learning-rate window is **narrower than a factor of two** — 1B is 0.000 at 1e-3,
+0.500 at 2e-3, 0.000 at 5e-3. A mechanism that only works inside a sub-2x band is
+impractical on its own terms: outside it, everything reads as an identical zero, so there is
+no gradient to tune along.
 
-Reader: **`unsloth/Llama-3.2-1B-Instruct`**, 131,072-token context.
+### 4. Online updating destroys the model without establishing the memory
 
-The choice is forced by two constraints pulling opposite ways. Arm A must hold the entire
-LongMemEval haystack, measured at **105,636 tokens median / 107,182 max**, so the reader needs
->110K of context. Arm D must LoRA that same model on a 24GB L4. That rules out the Qwen3 family
-(40,960) and SmolLM3 (65,536). Of what is left, Llama-3.2-1B needs 3.3GB of KV cache at full
-context where Phi-4-mini needs 13.7GB, and costs roughly a third of the prefill FLOPs that arm A
-pays on every query.
+100 updates applied as **one continuous stream**, not independent fine-tunes:
 
-| Arm | Mechanism | Context tokens/query |
+| Updates | Retention | Held-out perplexity |
 |---|---|---|
-| A. Full context | the entire haystack, in the window | ~106K |
-| B. Grep | string search over the transcript | varies |
-| C. Classical RAG | BM25 + dense + RRF | ~2-8K |
-| D. Weight memory | frozen LM + LoRA updated online | ~0 |
+| 0 | 0.000 | 30.58 (1.00x) |
+| 25 | 0.000 | 73.75 (2.41x) |
+| 50 | **0.375** | 121.29 (3.97x) |
+| 100 | 0.000 | **1126.25 (36.83x)** |
 
-Arm B exists because if weight memory cannot beat grep, the complexity is not earned.
+**There is no usable operating window.** Peak retention is 0.375 and already costs 4x
+perplexity. By 100 updates the model is 36.8x worse on held-out text and has retained
+nothing. This is not a bad accuracy/cost trade-off — there is no trade-off, because the
+accuracy side never materializes while the cost side runs away.
 
-## What gets measured
+*LoRA Learns Less and Forgets Less* measures forgetting after a **single** fine-tune. A
+memory system updates forever. This is that regime.
 
-1. **Retention** - can it answer about facts ingested N episodes ago?
-2. **Token cost per correct answer** - the whole point, made arithmetic.
-3. **Forgetting** - held-out general capability as a function of online update count.
-4. **The frontier** - LoRA rank against retention against degradation. A curve, not a number.
+---
 
-## Rules, from commit one
+## What is wrong with these numbers
 
-These are not a later cleanup. They are why the numbers will be worth reading.
+Stated here rather than buried, because a results document without this section is
+advertising.
 
-**One tokenizer, no fallback.** Every arm counts with `harness/tokens.py`, which loads the real
-reader tokenizer and *raises* if it cannot. There is no estimate path. The usual shortcut,
-`words * 1.3`, is not a noisy approximation of the truth - measured on this repo's own samples it
-lands between **0.79x and 3.46x** of the real count, erring in both directions depending on text
-shape. It overshoots on prose and undershoots a JSON chunk by 3.5x. It cannot be calibrated away
-and it does not cancel when you divide one arm's tokens by another's. The verdict survived a
-reader swap: on Qwen3's vocabulary the same samples spanned 0.79x to 4.23x. Pinned in
-`tests/test_tokens.py`, with the golden fingerprint that caught the swap.
+- **The capability probe measure failed.** Only 1 of 6 general-knowledge probes survived
+  validity filtering — a 1B reader cannot reliably answer "What is 2 plus 2?" in this prompt
+  format. That column is a single coin flip. Perplexity carried the forgetting result alone.
+- **The forgetting curve is n=1 seed.**
+- **Error bars understate true variance.** 3B returned 0.114 and 0.057 on an identical
+  config with an identical probe set — GPU kernel non-determinism, which `manual_seed` does
+  not fix. 3B's 0.057 is not distinguishable from zero.
+- **LongMemEval fits in a 131K window**, so on this corpus a bigger context substitutes for
+  memory. BEAM is loaded but unrun.
+- **Abstention detection is string matching and irreducibly fuzzy.** Moving the line moves
+  `answered_rate` by 0.23 and `accuracy_over_all` by 0.01 — the honest metric is ~23x more
+  stable, but not immune.
+
+Full detail in [`RESULTS.md`](RESULTS.md).
+
+---
+
+## Method
+
+The measurement rules were written before there was anything to measure, and several caught
+real errors later.
+
+**One tokenizer, no fallback.** Every arm counts with `harness/tokens.py`, which loads the
+real reader tokenizer and *raises* if it cannot. The usual shortcut, `words * 1.3`, lands
+between **0.79x and 3.46x** of the real count on this repo's own samples, erring in both
+directions by text shape. It cannot be calibrated away and does not cancel in a ratio.
 
 **Three numbers on every accuracy report.** `answered_rate`, `accuracy | answered`, and
-`accuracy over all` with abstentions counted wrong. Answered-only accuracy is trivially gamed:
-an arm that answers one probe correctly and abstains on the other 299 reports 1.00.
+`accuracy over all` with abstentions counted wrong. This caught a **4x error**: on the
+gameable metric grep (0.200) looks competitive with a 106K-token window (0.216); on the
+honest one it is four times worse.
 
-**Provenance or no row.** Eight fields - reader model, revision, tokenizer fingerprint, arm,
-split, seed, timestamp, corpus hash. `harness/ledger.append` raises rather than writing a row
-nobody could reproduce.
+**Provenance or no row.** Eight fields, or `ledger.append` raises.
 
-**The ledger is read line by line.** A whole-file `json.loads` on a JSON-lines file dies on line
-2, gets reported as one unreadable file, and inspects zero rows - silently exempting the exact
-artifact the audit exists to police. A corrupt line here costs one row.
+**The ledger is read line by line.** A whole-file `json.loads` on a JSON-lines file dies on
+line 2 and reports one unreadable file while inspecting zero rows — silently exempting the
+artifact the audit exists to police.
 
-**Degenerate runs are caught.** An all-abstain run passes every other gate: provenance complete,
-three numbers present, `accuracy_given_answered` correctly `None`. It is a well-formed
-measurement of nothing. So is a run that never abstains.
+**Degenerate runs are caught.** An all-abstain run passes every other gate. It is a
+well-formed measurement of nothing.
 
-**n >= 300 before any tail statistic.**
+---
 
-## Benchmarks
+## Seventeen bugs, in three classes
 
-- **LongMemEval-S** for the token-cost axis. ~115K tokens/question, 500 instances. It fits
-  inside a modern context window, which is what makes full-context a legitimate ceiling and
-  makes 115K-versus-zero legible. Stated caveat: on this corpus a bigger window substitutes for
-  memory, so it measures context-management efficiency as much as memory.
-- **BEAM (128K split)** for the retention axis - the regime where memory is provably *not*
-  substitutable by a bigger window.
+Every one produced output that looked entirely normal. The taxonomy matters more than the
+count, because only the first class is what "benchmark bugs" usually means:
+
+**Corrupted the numbers** — `words * 1.3` estimates; PEFT silently stacking adapters so each
+sweep config inherited the last; unseeded LoRA init (same config gave 1/2, 1/2, 2/2);
+`fact_nll` scoring `'pemberton'` `[79, 9034, 37733]` when the model emits `' Pemberton'`
+`[69383, 37733]`; abstention and correctness both firing on one response; abstention
+detection matching only the sanctioned phrase; GPU non-determinism at 3B but not 1B.
+
+**Destroyed work** — a fatal transport error with no retry; no resumability, discarding paid
+GPU time; `/environments/production/` routing to the *previous* build; a 24GB image that
+never finished deploying.
+
+**Cost money directly** — teardown on the last line of a script instead of in a trap, killed
+before it ran, leaving a replica billing; teardown aborting on the first already-inactive
+deployment while printing a false "shut down manually".
+
+Two were real defects that turned out to change **nothing**: the RAG lane asymmetry, and the
+learning-rate confound that motivated an entire re-run (all three sizes peak at the same
+lr, so the original comparison was valid). Both are recorded. A correction list containing
+only corrections that mattered is a filtered list.
+
+---
 
 ## Layout
 
 ```
-harness/tokens.py    one tokenizer, shared by every arm. No fallback.
+harness/tokens.py    one tokenizer, shared by every arm, no fallback
 harness/ledger.py    append-only JSONL, read line by line
-harness/gates.py     the validity gates and the three-number rule
-arms/                the four arms
-data/                benchmark loaders
-runs/ledger.jsonl    results
+harness/gates.py     validity gates and the three-number rule
+harness/reader.py    the single reader model and abstention contract
+arms/                full_context, grep, rag, weight_memory
+data/                LongMemEval and BEAM loaders
+scripts/             sweeps, gates, benchmark and forgetting-curve runners
+baseten/             deployment configs and cost-safe run scripts
+runs/ledger.jsonl    every run, with provenance
 ```
 
 ## Running
@@ -139,4 +180,4 @@ uv pip install -e ".[dev]"
 uv run pytest
 ```
 
-First run downloads the reader tokenizer.
+128 tests. First run downloads the reader tokenizer.
