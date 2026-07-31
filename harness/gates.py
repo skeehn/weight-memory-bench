@@ -16,6 +16,7 @@ report a bad result is not strict, it is broken.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Iterable, Sequence
 
@@ -89,6 +90,26 @@ def score_response(text: str, expected: str, is_abstention_probe: bool = False) 
     return Probe(answered=not abstained, correct=matched and not abstained)
 
 
+def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score interval.
+
+    Wilson rather than the normal approximation because these counts are small and near
+    zero, where the normal interval produces negative lower bounds and badly understates
+    uncertainty. At 4/100 the normal interval is [0.002, 0.078]; Wilson gives
+    [0.016, 0.098].
+
+    Reported on every accuracy number because without it, two arms scoring 0.040 look
+    identical when they are in fact indistinguishable -- a different and much weaker claim.
+    """
+    if n == 0:
+        return (0.0, 0.0)
+    p = successes / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    margin = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (max(0.0, centre - margin), min(1.0, centre + margin))
+
+
 def three_numbers(probes: Sequence[Probe]) -> dict:
     """The non-negotiable three.
 
@@ -104,6 +125,7 @@ def three_numbers(probes: Sequence[Probe]) -> dict:
             "answered_rate": None,
             "accuracy_given_answered": None,
             "accuracy_over_all": None,
+            "accuracy_over_all_ci95": None,
         }
 
     answered = [p for p in probes if p.answered]
@@ -120,6 +142,9 @@ def three_numbers(probes: Sequence[Probe]) -> dict:
         "accuracy_given_answered": (correct / len(answered)) if answered else None,
         # Denominator: every probe. Abstentions count as wrong.
         "accuracy_over_all": correct / n,
+        # Uncertainty travels with the number it qualifies, so a reader cannot pick up the
+        # point estimate without it.
+        "accuracy_over_all_ci95": wilson_interval(correct, n),
     }
 
 

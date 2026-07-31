@@ -30,6 +30,7 @@ from pathlib import Path
 
 from arms.full_context import FullContextArm
 from arms.grep import GrepArm
+from arms.oracle import OracleArm
 from arms.rag import RagArm
 from data import longmemeval as lme
 from harness import ledger
@@ -115,6 +116,8 @@ def remote_generate(
 def build_arm(name: str, budget: int, dense: bool):
     if name == "full_context":
         return FullContextArm()
+    if name == "oracle":
+        return OracleArm()
     if name == "grep":
         return GrepArm(budget=budget)
     if name == "rag":
@@ -222,7 +225,12 @@ def deactivate_all(key: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--split", default="dev", choices=["dev", "test", "all"])
-    parser.add_argument("--arms", nargs="+", default=["full_context", "grep", "rag"])
+    parser.add_argument(
+        "--arms",
+        nargs="+",
+        default=["full_context", "grep", "rag"],
+        help="oracle is a DIAGNOSTIC: it reads has_answer labels and is not a deployable arm",
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--budget", type=int, default=4096)
     parser.add_argument("--size", default="1B", choices=list(READER_LADDER))
@@ -309,7 +317,9 @@ def main() -> None:
         print(
             f"\n  answered_rate           {nums['answered_rate']:.3f}\n"
             f"  accuracy | answered     {given_str}\n"
-            f"  accuracy over all       {nums['accuracy_over_all']:.3f}\n"
+            f"  accuracy over all       {nums['accuracy_over_all']:.3f}"
+            f"  95% CI [{nums['accuracy_over_all_ci95'][0]:.3f}, "
+            f"{nums['accuracy_over_all_ci95'][1]:.3f}]\n"
             f"  median context tokens   {median_tokens:,}\n"
             f"  reportable              {report.reportable}  ({elapsed:.0f}s)"
         )
